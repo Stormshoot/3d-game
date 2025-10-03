@@ -4,10 +4,10 @@
     walkSpeed: 3,
     runSpeed: 6,
     accel: 25,
-    airAccel: 4,
+    airAccel: 12,      // high airAccel for sharp turns mid-air
     friction: 0.92,
     jumpPower: 5,
-    jumpBoost: 1.05,  // 5% horizontal boost on jump
+    jumpBoost: 1.05,   // 5% horizontal boost on jump
     gravity: -9.81,
     maxHSpeed: 100,
     coyoteTime: 0.25,
@@ -28,13 +28,13 @@
   sun.position.set(5, 10, 5);
   scene.add(sun);
 
-  // Ground: big 200x200 grid
+  // Ground: big 200x200 grid with slight mipmap
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
   groundTex.repeat.set(200, 200);
-  groundTex.magFilter = THREE.NearestFilter;
-  groundTex.minFilter = THREE.NearestFilter;
+  groundTex.magFilter = THREE.NearestFilter;               // sharp zoom-in
+  groundTex.minFilter = THREE.LinearMipMapLinearFilter;    // slight smoothing at distance
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(2000, 2000),
@@ -125,12 +125,15 @@
 
     if(player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
 
-    // Horizontal movement (direct input)
+    // Horizontal movement: sharp turns
+    const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
     if(dir.lengthSq() > 0){
-      const speed = (player.grounded ? maxSpeed : PLAYER.walkSpeed);
-      player.vel.x += dir.x * speed * dt * (player.grounded ? PLAYER.accel : PLAYER.airAccel);
-      player.vel.z += dir.z * speed * dt * (player.grounded ? PLAYER.accel : PLAYER.airAccel);
+      const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
+      hVel.addScaledVector(dir, accel * dt);
     }
+
+    player.vel.x = hVel.x;
+    player.vel.z = hVel.z;
 
     // Friction on ground
     if(player.grounded){
@@ -146,7 +149,7 @@
       player.grounded = false;
       player.jumpBufferTimer = 0;
 
-      // Preserve horizontal momentum with jump boost
+      // Preserve horizontal momentum with 1.05 boost
       player.vel.x *= PLAYER.jumpBoost;
       player.vel.z *= PLAYER.jumpBoost;
 
