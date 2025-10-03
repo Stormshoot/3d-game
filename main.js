@@ -17,7 +17,6 @@
   const WORLD_SIZE = 2000;
   let animationStarted = false;
 
-  // Scene and camera
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x88ccff);
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.05, 2000);
@@ -45,7 +44,6 @@
   );
   ground.rotation.x=-Math.PI/2;
   scene.add(ground);
-
   const objects = [ground];
 
   // Player
@@ -56,7 +54,8 @@
     pitch:0,
     grounded:true,
     coyoteTimer:0,
-    jumpBufferTimer:0
+    jumpBufferTimer:0,
+    runCap: PLAYER.runSpeed
   };
 
   function updateCamera(){ camera.position.copy(player.pos); camera.rotation.set(player.pitch,player.yaw,0,"ZYX"); }
@@ -71,6 +70,7 @@
     'ShiftLeft':'run','ShiftRight':'run',
     'Space':'jump','KeyP':'toggleLine'
   };
+
   addEventListener('keydown',e=>{
     if(keyMap[e.code]){
       keys[keyMap[e.code]]=true;e.preventDefault();
@@ -119,7 +119,6 @@
   camera.add(crossLine);
   scene.add(camera);
 
-  // Helper
   function getCameraDir(){
     const f=(keys.forward?1:0)-(keys.back?1:0);
     const s=(keys.right?1:0)-(keys.left?1:0);
@@ -145,13 +144,11 @@
       scene.add(sphere);
       explosions.push({mesh:sphere,time:0});
 
-      // Upwards-biased force
-      const toPlayer=player.pos.clone().sub(point);
-      const dist=Math.max(0.5,toPlayer.length());
+      // Spherical force (no upward bias)
+      const toPlayer = player.pos.clone().sub(point);
+      const dist = Math.max(0.5,toPlayer.length());
       toPlayer.normalize();
-      toPlayer.y+=0.5; // upward bias
-      toPlayer.normalize();
-      const power=120;
+      const power = 120;
       player.vel.add(toPlayer.multiplyScalar(power/dist));
     }
   });
@@ -168,60 +165,77 @@
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Horizontal velocity with walk/run cap
-    const hVel=new THREE.Vector3(player.vel.x,0,player.vel.z);
+    // Horizontal velocity with dynamic run cap
+    const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
-      const accel=player.grounded?PLAYER.accel:PLAYER.airAccel;
+      const accel = player.grounded?PLAYER.accel:PLAYER.airAccel;
       hVel.addScaledVector(dir,accel*dt);
-      if(hVel.length() > targetSpeed){ hVel.setLength(targetSpeed); }
+
+      if(player.grounded && hVel.length() > player.runCap){
+        hVel.setLength(player.runCap);
+      }
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
     }
-    player.vel.x=hVel.x; player.vel.z=hVel.z;
+    player.vel.x=hVel.x;
+    player.vel.z=hVel.z;
 
     // Gravity
-    player.vel.y+=PLAYER.gravity*dt;
+    player.vel.y += PLAYER.gravity*dt;
 
     // Jump
-    if(player.jumpBufferTimer>0&&(player.grounded||player.coyoteTimer>0)){
+    if(player.jumpBufferTimer>0 && (player.grounded || player.coyoteTimer>0)){
       player.grounded=false;
       player.jumpBufferTimer=0;
+
       const hv=new THREE.Vector3(player.vel.x,0,player.vel.z).multiplyScalar(PLAYER.jumpBoost);
       player.vel.x=hv.x; player.vel.z=hv.z;
-      const hSpeed=Math.sqrt(player.vel.x**2+player.vel.z**2);
-      const flatten=Math.min(hSpeed*0.08,PLAYER.jumpPower*0.6);
-      player.vel.y=PLAYER.jumpPower-flatten;
+
+      const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+      const flatten = Math.min(hSpeed*0.08, PLAYER.jumpPower*0.6);
+      player.vel.y = PLAYER.jumpPower - flatten;
+
+      // multiply run cap by 1.05 each jump
+      player.runCap *= 1.05;
+    }
+
+    // Reset run cap if speed <= walk speed
+    const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+    if(currentH <= PLAYER.walkSpeed){
+      player.runCap = PLAYER.runSpeed;
     }
 
     // Update position
-    player.pos.addScaledVector(player.vel,dt);
+    player.pos.addScaledVector(player.vel, dt);
 
     // Ground collision
-    if(player.pos.y<PLAYER.eyeHeight){
-      player.pos.y=PLAYER.eyeHeight;
-      player.vel.y=0;
+    if(player.pos.y < PLAYER.eyeHeight){
+      player.pos.y = PLAYER.eyeHeight;
+      player.vel.y = 0;
       player.grounded=true;
     } else player.grounded=false;
 
     // World wrap
-    if(player.pos.x>WORLD_SIZE/2) player.pos.x-=WORLD_SIZE;
-    if(player.pos.x<-WORLD_SIZE/2) player.pos.x+=WORLD_SIZE;
-    if(player.pos.z>WORLD_SIZE/2) player.pos.z-=WORLD_SIZE;
-    if(player.pos.z<-WORLD_SIZE/2) player.pos.z+=WORLD_SIZE;
+    if(player.pos.x > WORLD_SIZE/2) player.pos.x -= WORLD_SIZE;
+    if(player.pos.x < -WORLD_SIZE/2) player.pos.x += WORLD_SIZE;
+    if(player.pos.z > WORLD_SIZE/2) player.pos.z -= WORLD_SIZE;
+    if(player.pos.z < -WORLD_SIZE/2) player.pos.z += WORLD_SIZE;
 
     // Explosion visuals
     for(let i=explosions.length-1;i>=0;i--){
-      explosions[i].time+=dt;
-      explosions[i].mesh.scale.setScalar(1+explosions[i].time*4);
-      explosions[i].mesh.material.opacity=0.25*(1-explosions[i].time/0.5);
-      if(explosions[i].time>0.5){
+      explosions[i].time += dt;
+      explosions[i].mesh.scale.setScalar(1 + explosions[i].time*4);
+      explosions[i].mesh.material.opacity = 0.25*(1 - explosions[i].time/0.5);
+      if(explosions[i].time > 0.5){
         scene.remove(explosions[i].mesh);
         explosions.splice(i,1);
       }
     }
 
+    // Update camera & tracker
     updateCamera();
-    tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${Math.sqrt(player.vel.x**2+player.vel.z**2).toFixed(2)}  Run:${keys.run?1:0}`;
+    tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${currentH.toFixed(2)}  RunCap:${player.runCap.toFixed(2)}`;
+
     renderer.render(scene,camera);
     requestAnimationFrame(animate);
   }
@@ -232,3 +246,6 @@
     renderer.setSize(innerWidth,innerHeight);
   });
 })();
+
+  player.runCap = PLAYER.runSpeed;
+}
