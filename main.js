@@ -99,7 +99,8 @@
   function getMoveDir(){
     const f=(keys.forward?1:0)-(keys.back?1:0);
     const s=(keys.right?1:0)-(keys.left?1:0);
-    const dir=new THREE.Vector3(s,0,f);
+    // Fixed: W is forward (negative Z)
+    const dir=new THREE.Vector3(s,0,-f);
     if(dir.lengthSq()===0) return dir;
     dir.normalize();
     dir.applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw);
