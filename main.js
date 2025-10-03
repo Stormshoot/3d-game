@@ -149,7 +149,7 @@
       const toPlayer=player.pos.clone().sub(point);
       const dist=Math.max(0.5,toPlayer.length());
       toPlayer.normalize();
-      toPlayer.y+=0.5; // small upward bias
+      toPlayer.y+=0.5; // upward bias
       toPlayer.normalize();
       const power=120;
       player.vel.add(toPlayer.multiplyScalar(power/dist));
@@ -168,11 +168,12 @@
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Horizontal velocity
+    // Horizontal velocity with walk/run cap
     const hVel=new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
       const accel=player.grounded?PLAYER.accel:PLAYER.airAccel;
       hVel.addScaledVector(dir,accel*dt);
+      if(hVel.length() > targetSpeed){ hVel.setLength(targetSpeed); }
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
     }
