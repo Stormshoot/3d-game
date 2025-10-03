@@ -15,7 +15,9 @@
   };
 
   const WORLD_SIZE = 2000;
+  let animationStarted = false;
 
+  // Scene and camera
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x88ccff);
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.05, 2000);
@@ -81,11 +83,14 @@
   // Pointer lock
   const overlay=document.getElementById('overlay');
   const startBtn=document.getElementById('startBtn');
-  startBtn.addEventListener('click',()=>renderer.domElement.requestPointerLock());
+  startBtn.addEventListener('click',()=>{
+    renderer.domElement.requestPointerLock();
+    if(!animationStarted){ animate(); animationStarted=true; }
+  });
   document.addEventListener('pointerlockchange',()=>{
     overlay.style.display=(document.pointerLockElement===renderer.domElement)?'none':'';
-    if(document.pointerLockElement===renderer.domElement) requestAnimationFrame(animate);
   });
+
   document.addEventListener('mousemove',e=>{
     if(document.pointerLockElement!==renderer.domElement) return;
     const sens=0.0022;
@@ -160,9 +165,7 @@
     const dir=getCameraDir();
     const targetSpeed=(keys.run?PLAYER.runSpeed:PLAYER.walkSpeed);
 
-    // Timers
-    if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime;
-    else player.coyoteTimer-=dt;
+    if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
     // Horizontal velocity
