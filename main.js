@@ -1,13 +1,13 @@
-(() => {
+((() => {
   const PLAYER = {
     eyeHeight: 1.65,
     walkSpeed: 3,
     runSpeed: 6,
-    accel: 25,
-    decel: 12,
-    jumpBoost: 1.05,  // horizontal velocity multiplier on jump
-    jumpPower: 5,     // vertical jump velocity
-    friction: 0.92,   // slows horizontal velocity
+    accel: 25,       // ground acceleration
+    airAccel: 8,     // air control acceleration
+    friction: 0.92,  // slows horizontal speed on ground
+    jumpPower: 5,    // vertical jump velocity
+    jumpBoost: 1.05, // horizontal speed multiplier on jump
     gravity: -9.81
   };
 
@@ -25,12 +25,12 @@
   sun.position.set(5, 10, 5);
   scene.add(sun);
 
-  // Textured ground plane (checkerboard, sharp)
+  // Textured ground (sharp checkerboard)
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
   groundTex.repeat.set(200, 200);
-  groundTex.magFilter = THREE.NearestFilter;  // prevent blur
+  groundTex.magFilter = THREE.NearestFilter;
   groundTex.minFilter = THREE.NearestFilter;
 
   const ground = new THREE.Mesh(
@@ -40,7 +40,7 @@
   ground.rotation.x = -Math.PI/2;
   scene.add(ground);
 
-  // Player
+  // Player state
   const player = {
     pos: new THREE.Vector3(0, PLAYER.eyeHeight, 0),
     vel: new THREE.Vector3(),
@@ -68,8 +68,12 @@
     if(keyMap[e.code]){
       keys[keyMap[e.code]] = true; 
       e.preventDefault();
+
+      // Jump
       if(keyMap[e.code]==='jump' && player.grounded){
-        // Apply horizontal boost
+        player.grounded = false;
+
+        // Horizontal speed boost
         const horizontalVel = player.vel.clone();
         horizontalVel.y = 0;
         horizontalVel.multiplyScalar(PLAYER.jumpBoost);
@@ -78,16 +82,10 @@
 
         // Vertical jump
         player.vel.y = PLAYER.jumpPower;
-        player.grounded = false;
       }
     }
   });
-  addEventListener('keyup', e => {
-    if(keyMap[e.code]){
-      keys[keyMap[e.code]] = false; 
-      e.preventDefault();
-    }
-  });
+  addEventListener('keyup', e => { if(keyMap[e.code]) keys[keyMap[e.code]] = false; });
 
   // Pointer lock
   const overlay = document.getElementById('overlay');
@@ -112,7 +110,7 @@
     return dir;
   }
 
-  // Animation loop
+  // Main loop
   let prev = performance.now()/1000;
   function animate(){
     const now = performance.now()/1000;
@@ -120,16 +118,25 @@
     prev = now;
 
     const dir = getMoveDir();
-    const maxSpeed = (keys.run?PLAYER.runSpeed:PLAYER.walkSpeed);
+    const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
-    // Horizontal movement
-    if(dir.lengthSq() > 0){
-      const desired = dir.multiplyScalar(maxSpeed);
-      player.vel.x = THREE.MathUtils.lerp(player.vel.x, desired.x, 1-Math.exp(-PLAYER.accel*dt));
-      player.vel.z = THREE.MathUtils.lerp(player.vel.z, desired.z, 1-Math.exp(-PLAYER.accel*dt));
+    // Grounded movement
+    if(player.grounded){
+      if(dir.lengthSq() > 0){
+        const desired = dir.multiplyScalar(maxSpeed);
+        player.vel.x = THREE.MathUtils.lerp(player.vel.x, desired.x, 1-Math.exp(-PLAYER.accel*dt));
+        player.vel.z = THREE.MathUtils.lerp(player.vel.z, desired.z, 1-Math.exp(-PLAYER.accel*dt));
+      } else {
+        player.vel.x *= PLAYER.friction;
+        player.vel.z *= PLAYER.friction;
+      }
     } else {
-      player.vel.x *= PLAYER.friction;
-      player.vel.z *= PLAYER.friction;
+      // Air movement: slightly influence horizontal velocity (air control)
+      if(dir.lengthSq() > 0){
+        player.vel.x += dir.x * PLAYER.airAccel * dt;
+        player.vel.z += dir.z * PLAYER.airAccel * dt;
+      }
+      // No friction in air
     }
 
     // Gravity
