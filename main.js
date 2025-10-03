@@ -10,7 +10,8 @@
     jumpBoost: 1.02,
     gravity: -9.81,
     maxHSpeed: 100,
-    coyoteTime: 0.25
+    coyoteTime: 0.25,
+    jumpBuffer: 0.2
   };
 
   const scene = new THREE.Scene();
@@ -27,11 +28,11 @@
   sun.position.set(5, 10, 5);
   scene.add(sun);
 
-  // Ground (50x50 tiles)
+  // Ground: big 200x200 grid
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  groundTex.repeat.set(50, 50);
+  groundTex.repeat.set(200, 200);
   groundTex.magFilter = THREE.NearestFilter;
   groundTex.minFilter = THREE.NearestFilter;
 
@@ -42,6 +43,7 @@
   ground.rotation.x = -Math.PI/2;
   scene.add(ground);
 
+  // Player state
   const player = {
     pos: new THREE.Vector3(0, PLAYER.eyeHeight, 0),
     vel: new THREE.Vector3(),
@@ -49,7 +51,7 @@
     pitch: 0,
     grounded: true,
     coyoteTimer: 0,
-    jumpQueued: false
+    jumpBufferTimer: 0
   };
 
   function updateCamera(){
@@ -72,11 +74,8 @@
     if(keyMap[e.code]){
       keys[keyMap[e.code]] = true;
       e.preventDefault();
-
       if(keyMap[e.code]==='jump'){
-        if(player.grounded || player.coyoteTimer > 0){
-          player.jumpQueued = true; // jump immediately if allowed
-        }
+        player.jumpBufferTimer = PLAYER.jumpBuffer; // queue jump
       }
     }
   });
@@ -120,37 +119,34 @@
     const dir = getMoveDir();
     const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
-    // Update coyote timer
+    // Update timers
     if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
     else player.coyoteTimer -= dt;
 
-    // Horizontal movement
+    if(player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
+
+    // Horizontal movement (direct input)
+    if(dir.lengthSq() > 0){
+      const speed = (player.grounded ? maxSpeed : PLAYER.walkSpeed);
+      player.vel.x += dir.x * speed * dt * (player.grounded ? PLAYER.accel : PLAYER.airAccel);
+      player.vel.z += dir.z * speed * dt * (player.grounded ? PLAYER.accel : PLAYER.airAccel);
+    }
+
+    // Friction on ground
     if(player.grounded){
-      if(dir.lengthSq() > 0){
-        const desired = dir.multiplyScalar(maxSpeed);
-        player.vel.x = THREE.MathUtils.lerp(player.vel.x, desired.x, 1-Math.exp(-PLAYER.accel*dt));
-        player.vel.z = THREE.MathUtils.lerp(player.vel.z, desired.z, 1-Math.exp(-PLAYER.accel*dt));
-      } else {
-        player.vel.x *= PLAYER.friction;
-        player.vel.z *= PLAYER.friction;
-      }
-    } else {
-      if(dir.lengthSq() > 0){
-        player.vel.x += dir.x * PLAYER.airAccel * dt;
-        player.vel.z += dir.z * PLAYER.airAccel * dt;
-      }
-      // no friction in air
+      player.vel.x *= PLAYER.friction;
+      player.vel.z *= PLAYER.friction;
     }
 
     // Gravity
     player.vel.y += PLAYER.gravity * dt;
 
-    // Apply queued jump
-    if(player.jumpQueued && (player.grounded || player.coyoteTimer > 0)){
+    // Apply jump if buffered
+    if(player.jumpBufferTimer > 0 && (player.grounded || player.coyoteTimer > 0)){
       player.grounded = false;
-      player.jumpQueued = false;
+      player.jumpBufferTimer = 0;
 
-      // Horizontal boost
+      // Preserve horizontal momentum with jump boost
       const horizontalVel = player.vel.clone();
       horizontalVel.y = 0;
       horizontalVel.multiplyScalar(PLAYER.jumpBoost);
@@ -159,10 +155,8 @@
 
       // Jump arc scaling
       const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
-      const baseJump = PLAYER.jumpPower;
-      const maxFlatten = 3;
-      const flatten = Math.min(hSpeed * 0.1, maxFlatten);
-      player.vel.y = baseJump - flatten;
+      const flatten = Math.min(hSpeed * 0.1, 3);
+      player.vel.y = PLAYER.jumpPower - flatten;
     }
 
     // Update position
@@ -173,9 +167,7 @@
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
       player.grounded = true;
-    } else {
-      player.grounded = false;
-    }
+    } else player.grounded = false;
 
     // Horizontal velocity cap
     let hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
@@ -185,7 +177,7 @@
       hSpeed = PLAYER.maxHSpeed;
     }
 
-    // Reset speed if below walkSpeed-0.5
+    // Speed reset
     if(hSpeed <= PLAYER.walkSpeed - 0.5){
       player.vel.x = 0;
       player.vel.z = 0;
