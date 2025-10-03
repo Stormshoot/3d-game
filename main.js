@@ -13,6 +13,8 @@
     jumpBuffer: 0.25
   };
 
+  const WORLD_SIZE = 2000; // world wrap size
+
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x88ccff);
 
@@ -36,13 +38,13 @@
   groundTex.minFilter = THREE.NearestFilter;
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(2000, 2000),
+    new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE),
     new THREE.MeshStandardMaterial({ map: groundTex, side: THREE.DoubleSide })
   );
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  // Player
+  // Player state
   const player = {
     pos: new THREE.Vector3(0, PLAYER.eyeHeight, 0),
     vel: new THREE.Vector3(),
@@ -66,13 +68,18 @@
     'KeyA': 'left', 'ArrowLeft': 'left',
     'KeyD': 'right', 'ArrowRight': 'right',
     'ShiftLeft': 'run', 'ShiftRight': 'run',
-    'Space': 'jump'
+    'Space': 'jump',
+    'KeyP': 'toggleLine'
   };
   addEventListener('keydown', e => {
     if (keyMap[e.code]) {
       keys[keyMap[e.code]] = true;
       e.preventDefault();
+
       if (keyMap[e.code] === 'jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
+      if (keyMap[e.code] === 'toggleLine') {
+        crossLine.visible = !crossLine.visible;
+      }
     }
   });
   addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = false; });
@@ -89,7 +96,7 @@
     player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
   });
 
-  // Movement helpers
+  // Movement direction relative to camera
   function getMoveDir() {
     const f = (keys.forward ? 1 : 0) - (keys.back ? 1 : 0);
     const s = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
@@ -114,26 +121,43 @@
     if (hits.length > 0) {
       const point = hits[0].point.clone();
 
-      // Visual explosion sphere
+      // Explosion sphere visual
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(1, 16, 16),
-        new THREE.MeshBasicMaterial({ color: 0xff4422, transparent: true, opacity: 0.25 }) // 75% transparent
+        new THREE.MeshBasicMaterial({ color: 0xff4422, transparent: true, opacity: 0.25 })
       );
       sphere.position.copy(point);
       scene.add(sphere);
       explosions.push({ mesh: sphere, time: 0 });
 
-      // Apply spherical knockback
+      // Spherical knockback with speed scaling
       const toPlayer = player.pos.clone().sub(point);
       const dist = Math.max(0.5, toPlayer.length());
       toPlayer.normalize();
 
       const power = 120;
-      let force = toPlayer.multiplyScalar(power / dist);
-      force.y += 10; // upward bias
+      const force = toPlayer.multiplyScalar(power / dist);
       player.vel.add(force);
+
+      // scale jump arc with new hSpeed
+      const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
+      const hSpeed = hVel.length();
+      if (!player.grounded) {
+        player.vel.y = PLAYER.jumpPower - Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6);
+      }
     }
   });
+
+  // Crosshair helper line
+  const crossMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
+  const crossGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, -100)
+  ]);
+  const crossLine = new THREE.Line(crossGeo, crossMat);
+  camera.add(crossLine);
+  crossLine.visible = false;
+  scene.add(camera);
 
   // HUD XYZ tracker
   const hud = document.createElement('div');
@@ -160,7 +184,7 @@
     const hSpeed = hVel.length();
     const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
-    // Movement
+    // Ground vs air movement
     if (player.grounded) {
       if (dir.lengthSq() > 0) {
         const desired = dir.multiplyScalar(maxSpeed);
@@ -176,7 +200,7 @@
     player.vel.x = hVel.x;
     player.vel.z = hVel.z;
 
-    // Jump logic with coyote/buffer
+    // Coyote time & jump buffer
     if (player.grounded) {
       player.coyoteTimer = PLAYER.coyoteTime;
     } else {
@@ -192,8 +216,14 @@
     // Gravity
     player.vel.y += PLAYER.gravity * dt;
 
-    // Update pos
+    // Update position
     player.pos.addScaledVector(player.vel, dt);
+
+    // World wrap
+    if (player.pos.x > WORLD_SIZE / 2) player.pos.x -= WORLD_SIZE;
+    if (player.pos.x < -WORLD_SIZE / 2) player.pos.x += WORLD_SIZE;
+    if (player.pos.z > WORLD_SIZE / 2) player.pos.z -= WORLD_SIZE;
+    if (player.pos.z < -WORLD_SIZE / 2) player.pos.z += WORLD_SIZE;
 
     // Ground collision
     if (player.pos.y < PLAYER.eyeHeight) {
@@ -202,12 +232,15 @@
       player.grounded = true;
     }
 
-    // Explosions update
+    // Explosion visuals update
     for (let i = explosions.length - 1; i >= 0; i--) {
       const e = explosions[i];
       e.time += dt;
-      e.mesh.scale.setScalar(1 + e.time * 10);
-      e.mesh.material.opacity = Math.max(0, 0.25 - e.time * 1.5);
+
+      const progress = e.time / 0.5;
+      e.mesh.scale.setScalar(1 + progress * 10);
+      e.mesh.material.opacity = Math.max(0, 0.25 * (1 - progress));
+
       if (e.time > 0.5) {
         scene.remove(e.mesh);
         explosions.splice(i, 1);
