@@ -4,20 +4,19 @@
     walkSpeed: 3,
     runSpeed: 6,
     accel: 25,
-    airAccel: 12,
+    airAccel: 8,
     friction: 0.92,
     jumpPower: 5,
     jumpBoost: 1.05,
     gravity: -9.81,
-    maxHSpeed: 100,
     coyoteTime: 0.25,
-    jumpBuffer: 0.2
+    jumpBuffer: 0.25
   };
 
-  // Scene and renderer
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x88ccff);
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.05, 2000);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 2000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
@@ -25,25 +24,25 @@
   // Lighting
   scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.7));
   const sun = new THREE.DirectionalLight(0xffffff, 0.6);
-  sun.position.set(5,10,5);
+  sun.position.set(5, 10, 5);
   scene.add(sun);
 
-  // Ground (checkerboard) with slight mipmap
+  // Ground texture
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  groundTex.repeat.set(200,200);
+  groundTex.repeat.set(400, 400);
   groundTex.magFilter = THREE.NearestFilter;
-  groundTex.minFilter = THREE.LinearMipMapLinearFilter;
+  groundTex.minFilter = THREE.NearestFilter;
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(2000,2000),
+    new THREE.PlaneGeometry(2000, 2000),
     new THREE.MeshStandardMaterial({ map: groundTex, side: THREE.DoubleSide })
   );
-  ground.rotation.x = -Math.PI/2;
+  ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  // Player state
+  // Player
   const player = {
     pos: new THREE.Vector3(0, PLAYER.eyeHeight, 0),
     vel: new THREE.Vector3(),
@@ -54,7 +53,7 @@
     jumpBufferTimer: 0
   };
 
-  function updateCamera(){
+  function updateCamera() {
     camera.position.copy(player.pos);
     camera.rotation.set(player.pitch, player.yaw, 0, "ZYX");
   }
@@ -62,170 +61,169 @@
   // Input
   const keys = {};
   const keyMap = {
-    'KeyW':'forward','ArrowUp':'forward',
-    'KeyS':'back','ArrowDown':'back',
-    'KeyA':'left','ArrowLeft':'left',
-    'KeyD':'right','ArrowRight':'right',
-    'ShiftLeft':'run','ShiftRight':'run',
-    'Space':'jump'
+    'KeyW': 'forward', 'ArrowUp': 'forward',
+    'KeyS': 'back', 'ArrowDown': 'back',
+    'KeyA': 'left', 'ArrowLeft': 'left',
+    'KeyD': 'right', 'ArrowRight': 'right',
+    'ShiftLeft': 'run', 'ShiftRight': 'run',
+    'Space': 'jump'
   };
-
   addEventListener('keydown', e => {
-    if(keyMap[e.code]){
+    if (keyMap[e.code]) {
       keys[keyMap[e.code]] = true;
       e.preventDefault();
-      if(keyMap[e.code]==='jump'){
-        player.jumpBufferTimer = PLAYER.jumpBuffer;
-      }
+      if (keyMap[e.code] === 'jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
   });
-
-  addEventListener('keyup', e => { if(keyMap[e.code]) keys[keyMap[e.code]] = false; });
+  addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = false; });
 
   // Pointer lock
   const overlay = document.getElementById('overlay');
-  const startBtn = document.getElementById('startBtn');
-  startBtn.addEventListener('click', ()=>renderer.domElement.requestPointerLock());
-  document.addEventListener('pointerlockchange', ()=>{
-    overlay.style.display = (document.pointerLockElement===renderer.domElement)?'none':'';
-    if(document.pointerLockElement===renderer.domElement) requestAnimationFrame(animate);
-  });
+  document.getElementById('startBtn').addEventListener('click', () => renderer.domElement.requestPointerLock());
+  document.addEventListener('pointerlockchange', () => overlay.style.display = (document.pointerLockElement === renderer.domElement) ? 'none' : '');
   document.addEventListener('mousemove', e => {
-    if(document.pointerLockElement!==renderer.domElement) return;
+    if (document.pointerLockElement !== renderer.domElement) return;
     const sens = 0.0022;
-    player.yaw -= e.movementX*sens;
-    player.pitch -= e.movementY*sens;
-    player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
+    player.yaw -= e.movementX * sens;
+    player.pitch -= e.movementY * sens;
+    player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
   });
 
-  // Debug tracker
-  const tracker = document.createElement('div');
-  tracker.style.position = 'absolute';
-  tracker.style.top = '10px';
-  tracker.style.left = '10px';
-  tracker.style.color = '#fff';
-  tracker.style.background = 'rgba(0,0,0,0.5)';
-  tracker.style.padding = '6px';
-  tracker.style.fontFamily = 'monospace';
-  tracker.style.whiteSpace = 'pre';
-  document.body.appendChild(tracker);
-
-  // Helper: camera-relative input direction
-  function getCameraDir(){
-    const f = (keys.forward?1:0) - (keys.back?1:0);
-    const s = (keys.right?1:0) - (keys.left?1:0);
-    const dir = new THREE.Vector3(s,0,-f);
-    if(dir.lengthSq()===0) return dir;
+  // Movement helpers
+  function getMoveDir() {
+    const f = (keys.forward ? 1 : 0) - (keys.back ? 1 : 0);
+    const s = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const dir = new THREE.Vector3(s, 0, -f);
+    if (dir.lengthSq() === 0) return dir;
     dir.normalize();
-    dir.applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw);
+    dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yaw);
     return dir;
   }
 
-  let prevTime = performance.now()/1000;
-  function animate(){
-    const now = performance.now()/1000;
-    const dt = Math.min(0.1, now-prevTime);
-    prevTime = now;
+  // Explosions
+  const objects = [ground];
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2(0, 0);
+  const explosions = [];
 
-    const dir = getCameraDir();
-    const targetSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
+  document.addEventListener('mousedown', () => {
+    if (document.pointerLockElement !== renderer.domElement) return;
 
-    // Timers
-    if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
-    else player.coyoteTimer -= dt;
-    if(player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(objects);
+    if (hits.length > 0) {
+      const point = hits[0].point.clone();
 
-    // HORIZONTAL VELOCITY — camera-aligned but respecting run/walk target
+      // Visual explosion sphere
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xff4422, transparent: true, opacity: 0.25 }) // 75% transparent
+      );
+      sphere.position.copy(point);
+      scene.add(sphere);
+      explosions.push({ mesh: sphere, time: 0 });
+
+      // Apply spherical knockback
+      const toPlayer = player.pos.clone().sub(point);
+      const dist = Math.max(0.5, toPlayer.length());
+      toPlayer.normalize();
+
+      const power = 120;
+      let force = toPlayer.multiplyScalar(power / dist);
+      force.y += 10; // upward bias
+      player.vel.add(force);
+    }
+  });
+
+  // HUD XYZ tracker
+  const hud = document.createElement('div');
+  hud.style.position = 'fixed';
+  hud.style.top = '10px';
+  hud.style.left = '10px';
+  hud.style.color = 'white';
+  hud.style.fontFamily = 'monospace';
+  hud.style.fontSize = '16px';
+  hud.style.background = 'rgba(0,0,0,0.5)';
+  hud.style.padding = '4px 8px';
+  hud.style.borderRadius = '4px';
+  document.body.appendChild(hud);
+
+  // Main loop
+  let prev = performance.now() / 1000;
+  function animate() {
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.1, now - prev);
+    prev = now;
+
+    const dir = getMoveDir();
     const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
-    let currentSpeed = hVel.length();
+    const hSpeed = hVel.length();
+    const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
-    if(dir.lengthSq() > 0){
-      if(currentSpeed < 1e-4){
-        // starting from (near) rest: jump to targetSpeed in camera dir
-        hVel.copy(dir.clone().multiplyScalar(targetSpeed));
-        currentSpeed = targetSpeed;
-      } else if(currentSpeed < targetSpeed){
-        // accelerate toward camera direction (increase speed up to target)
-        // accel depends on ground/air
-        const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
-        hVel.addScaledVector(dir, accel * dt);
-        // clamp speed to targetSpeed
-        if(hVel.length() > targetSpeed) hVel.setLength(targetSpeed);
-        currentSpeed = hVel.length();
-        // snap direction toward camera while preserving speed magnitude (so turns are sharp)
-        hVel.setLength(currentSpeed);
-        hVel.copy(dir.clone().multiplyScalar(currentSpeed));
+    // Movement
+    if (player.grounded) {
+      if (dir.lengthSq() > 0) {
+        const desired = dir.multiplyScalar(maxSpeed);
+        hVel.lerp(desired, 1 - Math.exp(-PLAYER.accel * dt));
       } else {
-        // moving faster than target: keep magnitude but align direction instantly to camera
-        hVel.copy(dir.clone().multiplyScalar(currentSpeed));
+        hVel.multiplyScalar(PLAYER.friction);
       }
     } else {
-      // no input: keep hVel; friction will apply if grounded
+      if (dir.lengthSq() > 0) {
+        hVel.add(dir.multiplyScalar(PLAYER.airAccel * dt));
+      }
     }
-
-    // Friction when on ground
-    if(player.grounded){
-      hVel.multiplyScalar(PLAYER.friction);
-    }
-
-    // assign back
     player.vel.x = hVel.x;
     player.vel.z = hVel.z;
+
+    // Jump logic with coyote/buffer
+    if (player.grounded) {
+      player.coyoteTimer = PLAYER.coyoteTime;
+    } else {
+      player.coyoteTimer -= dt;
+    }
+    player.jumpBufferTimer -= dt;
+    if (player.jumpBufferTimer > 0 && player.coyoteTimer > 0) {
+      player.vel.y = PLAYER.jumpPower - Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6);
+      player.grounded = false;
+      player.jumpBufferTimer = 0;
+    }
 
     // Gravity
     player.vel.y += PLAYER.gravity * dt;
 
-    // JUMP (buffer + coyote). Preserve horizontal momentum and apply boost.
-    if(player.jumpBufferTimer > 0 && (player.grounded || player.coyoteTimer > 0)){
-      player.grounded = false;
-      player.jumpBufferTimer = 0;
-
-      // horizontal boost (vector scale — preserves direction)
-      const hv = new THREE.Vector3(player.vel.x, 0, player.vel.z).multiplyScalar(PLAYER.jumpBoost);
-      player.vel.x = hv.x;
-      player.vel.z = hv.z;
-
-      // scale jump arc with horizontal speed (flatten as speed increases)
-      const hSpeed = Math.sqrt(player.vel.x*player.vel.x + player.vel.z*player.vel.z);
-      const flatten = Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6); // tweakable
-      player.vel.y = PLAYER.jumpPower - flatten;
-    }
-
-    // Update position
+    // Update pos
     player.pos.addScaledVector(player.vel, dt);
 
     // Ground collision
-    if(player.pos.y < PLAYER.eyeHeight){
+    if (player.pos.y < PLAYER.eyeHeight) {
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
       player.grounded = true;
-    } else player.grounded = false;
-
-    // Horizontal speed cap
-    let hSpeed = Math.sqrt(player.vel.x*player.vel.x + player.vel.z*player.vel.z);
-    if(hSpeed > PLAYER.maxHSpeed){
-      player.vel.x = (player.vel.x / hSpeed) * PLAYER.maxHSpeed;
-      player.vel.z = (player.vel.z / hSpeed) * PLAYER.maxHSpeed;
-      hSpeed = PLAYER.maxHSpeed;
     }
 
-    // Speed reset if very slow
-    if(hSpeed <= PLAYER.walkSpeed - 0.5){
-      player.vel.x = 0;
-      player.vel.z = 0;
-      hSpeed = 0;
+    // Explosions update
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      const e = explosions[i];
+      e.time += dt;
+      e.mesh.scale.setScalar(1 + e.time * 10);
+      e.mesh.material.opacity = Math.max(0, 0.25 - e.time * 1.5);
+      if (e.time > 0.5) {
+        scene.remove(e.mesh);
+        explosions.splice(i, 1);
+      }
     }
 
-    // Update camera and tracker
     updateCamera();
-    tracker.textContent = `X: ${player.pos.x.toFixed(2)}  Y: ${player.pos.y.toFixed(2)}  Z: ${player.pos.z.toFixed(2)}\nSpeed: ${hSpeed.toFixed(2)}  (run=${keys.run?1:0})`;
+    hud.textContent = `X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}`;
 
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
   }
+  animate();
 
   addEventListener('resize', () => {
-    camera.aspect = innerWidth/innerHeight;
+    camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
