@@ -5,7 +5,7 @@
     runSpeed: 6,
     accel: 25,
     airAccel: 8,
-    friction: 0.92,
+    friction: 0.92, // friction applied only when no movement keys pressed
     jumpPower: 5,
     jumpBoost: 1.05,
     gravity: -9.81,
@@ -18,7 +18,7 @@
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x88ccff);
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 2000);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.05, 2000);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
@@ -39,7 +39,7 @@
     new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE),
     new THREE.MeshStandardMaterial({ map: groundTex, side: THREE.DoubleSide })
   );
-  ground.rotation.x = -Math.PI / 2;
+  ground.rotation.x = -Math.PI/2;
   scene.add(ground);
 
   const player = {
@@ -59,134 +59,135 @@
 
   const keys = {};
   const keyMap = {
-    'KeyW': 'forward', 'ArrowUp': 'forward',
-    'KeyS': 'back', 'ArrowDown': 'back',
-    'KeyA': 'left', 'ArrowLeft': 'left',
-    'KeyD': 'right', 'ArrowRight': 'right',
-    'ShiftLeft': 'run', 'ShiftRight': 'run',
-    'Space': 'jump',
-    'KeyP': 'toggleLine'
+    'KeyW':'forward','ArrowUp':'forward',
+    'KeyS':'back','ArrowDown':'back',
+    'KeyA':'left','ArrowLeft':'left',
+    'KeyD':'right','ArrowRight':'right',
+    'ShiftLeft':'run','ShiftRight':'run',
+    'Space':'jump',
+    'KeyP':'toggleLine'
   };
   addEventListener('keydown', e => {
-    if (keyMap[e.code]) {
+    if(keyMap[e.code]){
       keys[keyMap[e.code]] = true;
       e.preventDefault();
-      if (keyMap[e.code] === 'jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
-      if (keyMap[e.code] === 'toggleLine') crossLine.visible = !crossLine.visible;
+      if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
+      if(keyMap[e.code]==='toggleLine') crossLine.visible = !crossLine.visible;
     }
   });
-  addEventListener('keyup', e => { if (keyMap[e.code]) keys[keyMap[e.code]] = false; });
+  addEventListener('keyup', e => { if(keyMap[e.code]) keys[keyMap[e.code]] = false; });
 
   const overlay = document.getElementById('overlay');
-  document.getElementById('startBtn').addEventListener('click', () => renderer.domElement.requestPointerLock());
-  document.addEventListener('pointerlockchange', () => overlay.style.display = (document.pointerLockElement === renderer.domElement) ? 'none' : '');
+  document.getElementById('startBtn').addEventListener('click', ()=>renderer.domElement.requestPointerLock());
+  document.addEventListener('pointerlockchange', ()=>overlay.style.display = (document.pointerLockElement===renderer.domElement)?'none':'');
   document.addEventListener('mousemove', e => {
-    if (document.pointerLockElement !== renderer.domElement) return;
-    const sens = 0.0022;
-    player.yaw -= e.movementX * sens;
-    player.pitch -= e.movementY * sens;
-    player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
+    if(document.pointerLockElement!==renderer.domElement) return;
+    const sens=0.0022;
+    player.yaw -= e.movementX*sens;
+    player.pitch -= e.movementY*sens;
+    player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
   });
 
-  function getMoveDir() {
-    const f = (keys.forward ? 1 : 0) - (keys.back ? 1 : 0);
-    const s = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    const dir = new THREE.Vector3(s, 0, -f);
-    if (dir.lengthSq() === 0) return dir;
+  function getMoveDir(){
+    const f=(keys.forward?1:0)-(keys.back?1:0);
+    const s=(keys.right?1:0)-(keys.left?1:0);
+    const dir=new THREE.Vector3(s,0,-f);
+    if(dir.lengthSq()===0) return dir;
     dir.normalize();
-    dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yaw);
+    dir.applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw);
     return dir;
   }
 
   const objects = [ground];
   const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2(0, 0);
+  const mouse = new THREE.Vector2(0,0);
   const explosions = [];
 
-  document.addEventListener('mousedown', () => {
-    if (document.pointerLockElement !== renderer.domElement) return;
+  document.addEventListener('mousedown', ()=>{
+    if(document.pointerLockElement!==renderer.domElement) return;
 
-    raycaster.setFromCamera(mouse, camera);
+    raycaster.setFromCamera(mouse,camera);
     const hits = raycaster.intersectObjects(objects);
-    if (hits.length > 0) {
+    if(hits.length>0){
       const point = hits[0].point.clone();
-
       const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 16, 16),
-        new THREE.MeshBasicMaterial({ color: 0xff4422, transparent: true, opacity: 0.25 })
+        new THREE.SphereGeometry(1,16,16),
+        new THREE.MeshBasicMaterial({ color:0xff4422, transparent:true, opacity:0.25 })
       );
       sphere.position.copy(point);
       scene.add(sphere);
-      explosions.push({ mesh: sphere, time: 0 });
+      explosions.push({mesh:sphere,time:0});
 
       const toPlayer = player.pos.clone().sub(point);
-      const dist = Math.max(0.5, toPlayer.length());
+      const dist = Math.max(0.5,toPlayer.length());
       toPlayer.normalize();
       const power = 120;
-      const force = toPlayer.multiplyScalar(power / dist);
+      const force = toPlayer.multiplyScalar(power/dist);
       player.vel.add(force);
 
-      const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
+      const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
       const hSpeed = hVel.length();
-      if (!player.grounded) player.vel.y = PLAYER.jumpPower - Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6);
+      if(!player.grounded) player.vel.y = PLAYER.jumpPower - Math.min(hSpeed*0.08, PLAYER.jumpPower*0.6);
     }
   });
 
-  const crossMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
-  const crossGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0, 0, -100)
-  ]);
-  const crossLine = new THREE.Line(crossGeo, crossMat);
+  const crossMat = new THREE.LineBasicMaterial({ color:0xffff00 });
+  const crossGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-100)]);
+  const crossLine = new THREE.Line(crossGeo,crossMat);
   camera.add(crossLine);
-  crossLine.visible = false;
+  crossLine.visible=false;
   scene.add(camera);
 
-  // HUD XYZ + speed
   const hud = document.createElement('div');
-  hud.style.position = 'fixed';
-  hud.style.top = '10px';
-  hud.style.left = '10px';
-  hud.style.color = 'white';
-  hud.style.fontFamily = 'monospace';
-  hud.style.fontSize = '16px';
-  hud.style.background = 'rgba(0,0,0,0.5)';
-  hud.style.padding = '4px 8px';
-  hud.style.borderRadius = '4px';
+  hud.style.position='fixed';
+  hud.style.top='10px';
+  hud.style.left='10px';
+  hud.style.color='white';
+  hud.style.fontFamily='monospace';
+  hud.style.fontSize='16px';
+  hud.style.background='rgba(0,0,0,0.5)';
+  hud.style.padding='4px 8px';
+  hud.style.borderRadius='4px';
   document.body.appendChild(hud);
 
-  let prev = performance.now() / 1000;
-  function animate() {
-    const now = performance.now() / 1000;
-    const dt = Math.min(0.1, now - prev);
+  let prev = performance.now()/1000;
+  function animate(){
+    const now = performance.now()/1000;
+    const dt = Math.min(0.1, now-prev);
     prev = now;
 
     const dir = getMoveDir();
-    const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
+    let hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     const hSpeed = hVel.length();
-    const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
+    const maxSpeed = (keys.run?PLAYER.runSpeed:PLAYER.walkSpeed);
 
-    if (player.grounded) {
-      if (dir.lengthSq() > 0) {
+    // Grounded movement with bhop-friendly friction
+    if(player.grounded){
+      if(dir.lengthSq()>0){
         const desired = dir.multiplyScalar(maxSpeed);
-        hVel.lerp(desired, 1 - Math.exp(-PLAYER.accel * dt));
+        player.vel.x = THREE.MathUtils.lerp(player.vel.x, desired.x, 1-Math.exp(-PLAYER.accel*dt));
+        player.vel.z = THREE.MathUtils.lerp(player.vel.z, desired.z, 1-Math.exp(-PLAYER.accel*dt));
       } else {
-        hVel.multiplyScalar(PLAYER.friction);
+        // friction only if no keys pressed
+        player.vel.x *= PLAYER.friction;
+        player.vel.z *= PLAYER.friction;
       }
-    } else if (dir.lengthSq() > 0) {
-      hVel.add(dir.multiplyScalar(PLAYER.airAccel * dt));
+    } else {
+      if(dir.lengthSq()>0){
+        player.vel.x += dir.x * PLAYER.airAccel * dt;
+        player.vel.z += dir.z * PLAYER.airAccel * dt;
+      }
     }
-    player.vel.x = hVel.x;
-    player.vel.z = hVel.z;
 
-    if (player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
+    // Coyote time & jump buffer
+    if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
     else player.coyoteTimer -= dt;
     player.jumpBufferTimer -= dt;
 
-    if (player.jumpBufferTimer > 0 && player.coyoteTimer > 0) {
+    if(player.jumpBufferTimer>0 && player.coyoteTimer>0){
       player.vel.x *= PLAYER.jumpBoost;
       player.vel.z *= PLAYER.jumpBoost;
-      player.vel.y = PLAYER.jumpPower - Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6);
+      player.vel.y = PLAYER.jumpPower - Math.min(hVel.length()*0.08, PLAYER.jumpPower*0.6);
       player.grounded = false;
       player.jumpBufferTimer = 0;
     }
@@ -194,41 +195,44 @@
     player.vel.y += PLAYER.gravity * dt;
     player.pos.addScaledVector(player.vel, dt);
 
-    if (player.pos.x > WORLD_SIZE / 2) player.pos.x -= WORLD_SIZE;
-    if (player.pos.x < -WORLD_SIZE / 2) player.pos.x += WORLD_SIZE;
-    if (player.pos.z > WORLD_SIZE / 2) player.pos.z -= WORLD_SIZE;
-    if (player.pos.z < -WORLD_SIZE / 2) player.pos.z += WORLD_SIZE;
+    // World wrap
+    if(player.pos.x>WORLD_SIZE/2) player.pos.x-=WORLD_SIZE;
+    if(player.pos.x<-WORLD_SIZE/2) player.pos.x+=WORLD_SIZE;
+    if(player.pos.z>WORLD_SIZE/2) player.pos.z-=WORLD_SIZE;
+    if(player.pos.z<-WORLD_SIZE/2) player.pos.z+=WORLD_SIZE;
 
-    if (player.pos.y < PLAYER.eyeHeight) {
-      player.pos.y = PLAYER.eyeHeight;
-      player.vel.y = 0;
-      player.grounded = true;
+    // Ground collision
+    if(player.pos.y<PLAYER.eyeHeight){
+      player.pos.y=PLAYER.eyeHeight;
+      player.vel.y=0;
+      player.grounded=true;
     }
 
-    for (let i = explosions.length - 1; i >= 0; i--) {
+    // Explosion visuals
+    for(let i=explosions.length-1;i>=0;i--){
       const e = explosions[i];
       e.time += dt;
-      const progress = e.time / 0.5;
-      e.mesh.scale.setScalar(1 + progress * 10);
-      e.mesh.material.opacity = Math.max(0, 0.25 * (1 - progress));
-      if (e.time > 0.5) {
+      const progress = e.time/0.5;
+      e.mesh.scale.setScalar(1 + progress*10);
+      e.mesh.material.opacity = Math.max(0,0.25*(1-progress));
+      if(e.time>0.5){
         scene.remove(e.mesh);
-        explosions.splice(i, 1);
+        explosions.splice(i,1);
       }
     }
 
     updateCamera();
-    const horSpeed = Math.sqrt(player.vel.x ** 2 + player.vel.z ** 2).toFixed(2);
-    hud.innerHTML = `X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}<br>
-                     <span style="color:lime">Speed:${horSpeed}</span>`;
+    const horSpeed = Math.sqrt(player.vel.x**2+player.vel.z**2).toFixed(2);
+    hud.innerHTML=`X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}<br>
+                   <span style="color:lime">Speed:${horSpeed}</span>`;
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
     requestAnimationFrame(animate);
   }
   animate();
 
-  addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
+  addEventListener('resize', ()=>{
+    camera.aspect = innerWidth/innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
