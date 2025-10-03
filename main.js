@@ -28,7 +28,7 @@
   sun.position.set(5,10,5);
   scene.add(sun);
 
-  // Ground
+  // Ground (checkerboard) with slight mipmap
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
@@ -105,10 +105,12 @@
   tracker.style.left = '10px';
   tracker.style.color = '#fff';
   tracker.style.background = 'rgba(0,0,0,0.5)';
-  tracker.style.padding = '5px';
+  tracker.style.padding = '6px';
   tracker.style.fontFamily = 'monospace';
+  tracker.style.whiteSpace = 'pre';
   document.body.appendChild(tracker);
 
+  // Helper: camera-relative input direction
   function getCameraDir(){
     const f = (keys.forward?1:0) - (keys.back?1:0);
     const s = (keys.right?1:0) - (keys.left?1:0);
@@ -126,45 +128,66 @@
     prevTime = now;
 
     const dir = getCameraDir();
-    const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
+    const targetSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
     // Timers
     if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
     else player.coyoteTimer -= dt;
     if(player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
 
-    // Horizontal velocity always camera-relative
-    const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
+    // HORIZONTAL VELOCITY — camera-aligned but respecting run/walk target
+    const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
+    let currentSpeed = hVel.length();
+
     if(dir.lengthSq() > 0){
-      // Maintain speed magnitude
-      const speed = hVel.length() > 0 ? hVel.length() : maxSpeed;
-      hVel.copy(dir.multiplyScalar(speed));
-      // Optional: accelerate gradually instead of snapping for smoother feel
-      // hVel.lerp(dir.clone().multiplyScalar(speed), dt*10);
+      if(currentSpeed < 1e-4){
+        // starting from (near) rest: jump to targetSpeed in camera dir
+        hVel.copy(dir.clone().multiplyScalar(targetSpeed));
+        currentSpeed = targetSpeed;
+      } else if(currentSpeed < targetSpeed){
+        // accelerate toward camera direction (increase speed up to target)
+        // accel depends on ground/air
+        const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
+        hVel.addScaledVector(dir, accel * dt);
+        // clamp speed to targetSpeed
+        if(hVel.length() > targetSpeed) hVel.setLength(targetSpeed);
+        currentSpeed = hVel.length();
+        // snap direction toward camera while preserving speed magnitude (so turns are sharp)
+        hVel.setLength(currentSpeed);
+        hVel.copy(dir.clone().multiplyScalar(currentSpeed));
+      } else {
+        // moving faster than target: keep magnitude but align direction instantly to camera
+        hVel.copy(dir.clone().multiplyScalar(currentSpeed));
+      }
+    } else {
+      // no input: keep hVel; friction will apply if grounded
     }
 
-    // Friction on ground
-    if(player.grounded) hVel.multiplyScalar(PLAYER.friction);
+    // Friction when on ground
+    if(player.grounded){
+      hVel.multiplyScalar(PLAYER.friction);
+    }
 
+    // assign back
     player.vel.x = hVel.x;
     player.vel.z = hVel.z;
 
     // Gravity
     player.vel.y += PLAYER.gravity * dt;
 
-    // Jump logic
+    // JUMP (buffer + coyote). Preserve horizontal momentum and apply boost.
     if(player.jumpBufferTimer > 0 && (player.grounded || player.coyoteTimer > 0)){
       player.grounded = false;
       player.jumpBufferTimer = 0;
 
-      // Preserve horizontal momentum with boost
-      const hVec = new THREE.Vector3(player.vel.x,0,player.vel.z).multiplyScalar(PLAYER.jumpBoost);
-      player.vel.x = hVec.x;
-      player.vel.z = hVec.z;
+      // horizontal boost (vector scale — preserves direction)
+      const hv = new THREE.Vector3(player.vel.x, 0, player.vel.z).multiplyScalar(PLAYER.jumpBoost);
+      player.vel.x = hv.x;
+      player.vel.z = hv.z;
 
-      // Scale jump arc by horizontal speed
-      const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
-      const flatten = Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6);
+      // scale jump arc with horizontal speed (flatten as speed increases)
+      const hSpeed = Math.sqrt(player.vel.x*player.vel.x + player.vel.z*player.vel.z);
+      const flatten = Math.min(hSpeed * 0.08, PLAYER.jumpPower * 0.6); // tweakable
       player.vel.y = PLAYER.jumpPower - flatten;
     }
 
@@ -179,24 +202,23 @@
     } else player.grounded = false;
 
     // Horizontal speed cap
-    let hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+    let hSpeed = Math.sqrt(player.vel.x*player.vel.x + player.vel.z*player.vel.z);
     if(hSpeed > PLAYER.maxHSpeed){
       player.vel.x = (player.vel.x / hSpeed) * PLAYER.maxHSpeed;
       player.vel.z = (player.vel.z / hSpeed) * PLAYER.maxHSpeed;
       hSpeed = PLAYER.maxHSpeed;
     }
 
-    // Speed reset
+    // Speed reset if very slow
     if(hSpeed <= PLAYER.walkSpeed - 0.5){
       player.vel.x = 0;
       player.vel.z = 0;
+      hSpeed = 0;
     }
 
-    // Update camera
+    // Update camera and tracker
     updateCamera();
-
-    // Update tracker
-    tracker.textContent = `X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${hSpeed.toFixed(2)}`;
+    tracker.textContent = `X: ${player.pos.x.toFixed(2)}  Y: ${player.pos.y.toFixed(2)}  Z: ${player.pos.z.toFixed(2)}\nSpeed: ${hSpeed.toFixed(2)}  (run=${keys.run?1:0})`;
 
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
