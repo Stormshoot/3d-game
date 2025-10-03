@@ -7,7 +7,7 @@
     airAccel: 4,
     friction: 0.92,
     jumpPower: 5,
-    jumpBoost: 1.02,
+    jumpBoost: 1.05,  // 5% horizontal boost on jump
     gravity: -9.81,
     maxHSpeed: 100,
     coyoteTime: 0.25,
@@ -75,7 +75,7 @@
       keys[keyMap[e.code]] = true;
       e.preventDefault();
       if(keyMap[e.code]==='jump'){
-        player.jumpBufferTimer = PLAYER.jumpBuffer; // queue jump
+        player.jumpBufferTimer = PLAYER.jumpBuffer;
       }
     }
   });
@@ -147,11 +147,8 @@
       player.jumpBufferTimer = 0;
 
       // Preserve horizontal momentum with jump boost
-      const horizontalVel = player.vel.clone();
-      horizontalVel.y = 0;
-      horizontalVel.multiplyScalar(PLAYER.jumpBoost);
-      player.vel.x = horizontalVel.x;
-      player.vel.z = horizontalVel.z;
+      player.vel.x *= PLAYER.jumpBoost;
+      player.vel.z *= PLAYER.jumpBoost;
 
       // Jump arc scaling
       const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
