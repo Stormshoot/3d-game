@@ -3,13 +3,14 @@
     eyeHeight: 1.65,
     walkSpeed: 3,
     runSpeed: 6,
-    accel: 25,       // ground acceleration
-    airAccel: 4,     // air control acceleration (safe)
-    friction: 0.92,  // slows horizontal speed on ground
-    jumpPower: 5,    // vertical jump velocity
-    jumpBoost: 1.02, // horizontal speed multiplier on jump
+    accel: 25,
+    airAccel: 4,
+    friction: 0.92,
+    jumpPower: 5,
+    jumpBoost: 1.02,
     gravity: -9.81,
-    maxHSpeed: 100   // horizontal velocity cap
+    maxHSpeed: 100,
+    coyoteTime: 0.25
   };
 
   const scene = new THREE.Scene();
@@ -26,11 +27,11 @@
   sun.position.set(5, 10, 5);
   scene.add(sun);
 
-  // Ground plane (2x2 checkerboard, sharp)
+  // Ground (50x50 tiles)
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  groundTex.repeat.set(2, 2);
+  groundTex.repeat.set(50, 50);
   groundTex.magFilter = THREE.NearestFilter;
   groundTex.minFilter = THREE.NearestFilter;
 
@@ -41,13 +42,14 @@
   ground.rotation.x = -Math.PI/2;
   scene.add(ground);
 
-  // Player
   const player = {
     pos: new THREE.Vector3(0, PLAYER.eyeHeight, 0),
     vel: new THREE.Vector3(),
     yaw: 0,
     pitch: 0,
-    grounded: true
+    grounded: true,
+    coyoteTimer: 0,
+    jumpQueued: false
   };
 
   function updateCamera(){
@@ -65,33 +67,27 @@
     'ShiftLeft':'run','ShiftRight':'run',
     'Space':'jump'
   };
+
   addEventListener('keydown', e => {
     if(keyMap[e.code]){
-      keys[keyMap[e.code]] = true; 
+      keys[keyMap[e.code]] = true;
       e.preventDefault();
 
-      // Jump
-      if(keyMap[e.code]==='jump' && player.grounded){
-        player.grounded = false;
-
-        // Horizontal speed boost
-        const horizontalVel = player.vel.clone();
-        horizontalVel.y = 0;
-        horizontalVel.multiplyScalar(PLAYER.jumpBoost);
-        player.vel.x = horizontalVel.x;
-        player.vel.z = horizontalVel.z;
-
-        // Vertical jump
-        player.vel.y = PLAYER.jumpPower;
+      if(keyMap[e.code]==='jump'){
+        if(player.grounded || player.coyoteTimer > 0){
+          player.jumpQueued = true; // jump immediately if allowed
+        }
       }
     }
   });
+
   addEventListener('keyup', e => { if(keyMap[e.code]) keys[keyMap[e.code]] = false; });
 
   // Pointer lock
   const overlay = document.getElementById('overlay');
   const startBtn = document.getElementById('startBtn');
   startBtn.addEventListener('click', ()=>renderer.domElement.requestPointerLock());
+
   document.addEventListener('pointerlockchange', ()=>{
     overlay.style.display = (document.pointerLockElement===renderer.domElement)?'none':'';
     if(document.pointerLockElement===renderer.domElement) requestAnimationFrame(animate);
@@ -99,24 +95,22 @@
 
   document.addEventListener('mousemove', e => {
     if(document.pointerLockElement!==renderer.domElement) return;
-    const sens=0.0022;
+    const sens = 0.0022;
     player.yaw -= e.movementX*sens;
     player.pitch -= e.movementY*sens;
     player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
   });
 
-  // Movement helper
   function getMoveDir(){
     const f = (keys.forward?1:0) - (keys.back?1:0);
     const s = (keys.right?1:0) - (keys.left?1:0);
-    const dir = new THREE.Vector3(s, 0, -f);
-    if(dir.lengthSq() === 0) return dir;
+    const dir = new THREE.Vector3(s,0,-f);
+    if(dir.lengthSq()===0) return dir;
     dir.normalize();
     dir.applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw);
     return dir;
   }
 
-  // Main loop
   let prevTime = performance.now()/1000;
   function animate(){
     const now = performance.now()/1000;
@@ -126,6 +120,11 @@
     const dir = getMoveDir();
     const maxSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
+    // Update coyote timer
+    if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
+    else player.coyoteTimer -= dt;
+
+    // Horizontal movement
     if(player.grounded){
       if(dir.lengthSq() > 0){
         const desired = dir.multiplyScalar(maxSpeed);
@@ -140,11 +139,31 @@
         player.vel.x += dir.x * PLAYER.airAccel * dt;
         player.vel.z += dir.z * PLAYER.airAccel * dt;
       }
-      // No friction in air
+      // no friction in air
     }
 
     // Gravity
     player.vel.y += PLAYER.gravity * dt;
+
+    // Apply queued jump
+    if(player.jumpQueued && (player.grounded || player.coyoteTimer > 0)){
+      player.grounded = false;
+      player.jumpQueued = false;
+
+      // Horizontal boost
+      const horizontalVel = player.vel.clone();
+      horizontalVel.y = 0;
+      horizontalVel.multiplyScalar(PLAYER.jumpBoost);
+      player.vel.x = horizontalVel.x;
+      player.vel.z = horizontalVel.z;
+
+      // Jump arc scaling
+      const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+      const baseJump = PLAYER.jumpPower;
+      const maxFlatten = 3;
+      const flatten = Math.min(hSpeed * 0.1, maxFlatten);
+      player.vel.y = baseJump - flatten;
+    }
 
     // Update position
     player.pos.addScaledVector(player.vel, dt);
@@ -154,13 +173,22 @@
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
       player.grounded = true;
+    } else {
+      player.grounded = false;
     }
 
-    // Cap horizontal velocity
-    const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+    // Horizontal velocity cap
+    let hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
     if(hSpeed > PLAYER.maxHSpeed){
       player.vel.x = (player.vel.x / hSpeed) * PLAYER.maxHSpeed;
       player.vel.z = (player.vel.z / hSpeed) * PLAYER.maxHSpeed;
+      hSpeed = PLAYER.maxHSpeed;
+    }
+
+    // Reset speed if below walkSpeed-0.5
+    if(hSpeed <= PLAYER.walkSpeed - 0.5){
+      player.vel.x = 0;
+      player.vel.z = 0;
     }
 
     updateCamera();
