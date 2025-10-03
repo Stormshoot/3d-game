@@ -1,39 +1,27 @@
-html,body{
-  margin:0;
-  height:100%;
-  background:#111;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
-  color:#ddd;
-  overflow:hidden;
+html,body {
+  margin:0; height:100%; background:#111;
+  font-family:sans-serif; color:#ddd; overflow:hidden;
 }
 
-#overlay{
-  position:absolute;
-  left:10px;
-  top:10px;
-  background:rgba(10,10,10,0.65);
-  padding:12px;
-  border-radius:8px;
+#overlay {
+  position:absolute; top:10px; left:10px;
+  background:rgba(0,0,0,0.7);
+  padding:12px; border-radius:8px; max-width:300px;
   z-index:10;
-  max-width:320px;
 }
 
-#overlay h1{ margin:0 0 6px 0; font-size:16px; }
-#overlay p{ margin:6px 0; font-size:13px; color:#cfcfcf; }
-#startBtn{ padding:8px 10px; background:#2b8; border:none; border-radius:6px; cursor:pointer; color:#042; font-weight:700; }
+#overlay h1 { margin:0 0 6px 0; font-size:16px; }
+#overlay p { margin:6px 0; font-size:13px; }
+#startBtn {
+  padding:8px 10px; border:none; border-radius:6px;
+  background:#29a; color:white; font-weight:700;
+  cursor:pointer;
+}
 
-#hud { position: absolute; inset:0; pointer-events:none; }
+#hud { position:absolute; inset:0; pointer-events:none; }
 #crosshair {
   position:absolute; left:50%; top:50%;
   transform:translate(-50%,-50%);
-  color:#dcdcdc;
-  font-size:24px;
-  opacity:0.9;
-  pointer-events:none;
+  font-size:24px; color:#fff; opacity:0.8;
   user-select:none;
-  mix-blend-mode:screen;
 }
-
-canvas { display:block; }
-
-.hint { font-size:12px; color:#bdbdbd; margin-top:8px }
