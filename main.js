@@ -6,9 +6,9 @@
     accel: 100,
     airAccel: 12,
     friction: 0.92,
-    jumpPower: 5,
+    jumpPower: 10,
     jumpBoost: 1.05,
-    gravity: -19.62, // stronger gravity
+    gravity: -40,
     maxHSpeed: 100,
     coyoteTime: 0.25,
     jumpBuffer: 0.2
