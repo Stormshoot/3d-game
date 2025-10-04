@@ -1,4 +1,3 @@
-
 (() => {
   const PLAYER = {
     eyeHeight: 1.65,
