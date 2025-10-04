@@ -22,7 +22,6 @@
 
   const hemi = new THREE.HemisphereLight(0xffffff,0x444444,0.7);
   scene.add(hemi);
-
   const sunLight = new THREE.DirectionalLight(0xffffff,0.6);
   scene.add(sunLight);
 
@@ -36,7 +35,6 @@
   skyU['mieDirectionalG'].value = 0.8;
   const sun = new THREE.Vector3();
   let timeOfDay = 0;
-
   const sunSphere = new THREE.Mesh(
     new THREE.SphereGeometry(20,16,8),
     new THREE.MeshBasicMaterial({color:0xffffcc,emissive:0xffffcc})
@@ -75,7 +73,15 @@
   const keys = {};
   const keyMap = {'KeyW':'forward','ArrowUp':'forward','KeyS':'back','ArrowDown':'back','KeyA':'left','ArrowLeft':'left','KeyD':'right','ArrowRight':'right','ShiftLeft':'run','ShiftRight':'run','Space':'jump'};
 
+  let started = false;
+
   addEventListener('keydown', e=>{
+    if(!started && e.code === 'Digit1'){
+      started = true;
+      renderer.domElement.requestPointerLock();
+      animate();
+    }
+
     if(keyMap[e.code]){
       keys[keyMap[e.code]]=true;
       e.preventDefault();
@@ -83,8 +89,6 @@
     }
   });
   addEventListener('keyup', e=>{if(keyMap[e.code]) keys[keyMap[e.code]]=false;});
-
-  renderer.domElement.requestPointerLock();
 
   document.addEventListener('mousemove', e=>{
     if(document.pointerLockElement!==renderer.domElement) return;
@@ -157,7 +161,7 @@
   }
 
   document.addEventListener('mousedown', e=>{
-    if(document.pointerLockElement!==renderer.domElement) return;
+    if(!started) return;
     const now=performance.now()/1000;
     if(now-lastShot<fireRate) return;
     lastShot=now;
@@ -186,7 +190,8 @@
   let prevTime=performance.now()/1000;
   function animate(){
     requestAnimationFrame(animate);
-    if(document.pointerLockElement!==renderer.domElement) return;
+    if(!started || document.pointerLockElement!==renderer.domElement) return;
+
     const now=performance.now()/1000;
     const dt=Math.min(0.1,now-prevTime); prevTime=now;
 
@@ -254,7 +259,6 @@
     tracker.textContent=`X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}\nSpeed:${hSpeed.toFixed(2)} runCap:${player.runCap.toFixed(2)}`;
     renderer.render(scene,camera);
   }
-  animate();
 
   addEventListener('resize',()=>{
     camera.aspect=innerWidth/innerHeight;
