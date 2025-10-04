@@ -153,8 +153,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
   });
 
   // Screen shake state
-  let shakeTime = 0;
-  let shakeIntensity = 0;
+  let shakeTime = 0.5;
+  let shakeIntensity = 0.3;
 
   let prevTime = performance.now() / 1000;
   window.animate = function animate() {
