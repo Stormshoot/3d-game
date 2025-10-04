@@ -36,6 +36,12 @@
   const sun = new THREE.Vector3();
   let timeOfDay = 0;
 
+  const sunSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(20, 16, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffffcc, emissive: 0xffffcc })
+  );
+  scene.add(sunSphere);
+
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
@@ -49,10 +55,12 @@
   );
   ground.rotation.x = -Math.PI/2;
   scene.add(ground);
+  const objects = [ground];
 
   const player = {
     pos: new THREE.Vector3(0, PLAYER.eyeHeight, 0),
     vel: new THREE.Vector3(),
+    explosionVel: new THREE.Vector3(),
     yaw: 0,
     pitch: 0,
     grounded: true,
@@ -80,12 +88,10 @@
     if(keyMap[e.code]){
       keys[keyMap[e.code]] = true;
       e.preventDefault();
-      if(keyMap[e.code]==='jump'){
-        player.jumpBufferTimer = PLAYER.jumpBuffer;
-      }
+      if(keyMap[e.code] === 'jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
-    if(e.code==='KeyE'){
-      if(document.pointerLockElement!==renderer.domElement){
+    if(e.code === 'KeyE'){
+      if(document.pointerLockElement !== renderer.domElement){
         renderer.domElement.requestPointerLock();
       }
     }
@@ -94,13 +100,14 @@
   addEventListener('keyup', e => { if(keyMap[e.code]) keys[keyMap[e.code]] = false; });
 
   document.addEventListener('pointerlockchange', ()=>{
-    if(document.pointerLockElement===renderer.domElement) requestAnimationFrame(animate);
+    if(document.pointerLockElement === renderer.domElement) requestAnimationFrame(animate);
   });
+
   document.addEventListener('mousemove', e => {
-    if(document.pointerLockElement!==renderer.domElement) return;
+    if(document.pointerLockElement !== renderer.domElement) return;
     const sens = 0.0022;
-    player.yaw -= e.movementX*sens;
-    player.pitch -= e.movementY*sens;
+    player.yaw -= e.movementX * sens;
+    player.pitch -= e.movementY * sens;
     player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
   });
 
@@ -119,61 +126,131 @@
     const f = (keys.forward?1:0) - (keys.back?1:0);
     const s = (keys.right?1:0) - (keys.left?1:0);
     const dir = new THREE.Vector3(s,0,-f);
-    if(dir.lengthSq()===0) return dir;
+    if(dir.lengthSq() === 0) return dir;
     dir.normalize();
     dir.applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw);
     return dir;
   }
 
   const explosions = [];
-  addEventListener('click', e=>{
-    if(document.pointerLockElement===renderer.domElement){
-      const exp = {
-        pos: player.pos.clone().add(new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw).multiplyScalar(5)),
-        timer:0.5
-      };
-      explosions.push(exp);
-    }
-  });
 
-  function applyExplosions(dt){
-    for(let i=explosions.length-1;i>=0;i--){
-      const exp = explosions[i];
-      const diff = player.pos.clone().sub(exp.pos);
-      const dist = diff.length();
-      if(dist<50){
-        const force = diff.normalize().multiplyScalar((50-dist)*30*dt);
-        player.vel.add(force);
-      }
-      exp.timer -= dt;
-      if(exp.timer<=0) explosions.splice(i,1);
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2(0,0);
+
+  function spawnExplosionAt(point){
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.25 })
+    );
+    sphere.position.copy(point);
+    scene.add(sphere);
+    explosions.push({ mesh: sphere, time: 0, point: point });
+    const toPlayer = player.pos.clone().sub(point);
+    const dist = toPlayer.length();
+    if(dist < 50){
+      const force = (50 - dist)/50 * 120;
+      toPlayer.normalize();
+      player.explosionVel.add(toPlayer.multiplyScalar(force));
     }
   }
 
-  function updateSky(dt){
-    timeOfDay += dt*60;
-    if(timeOfDay>360) timeOfDay-=360;
-    const phi = THREE.MathUtils.degToRad(90-(Math.sin(timeOfDay*Math.PI/180)*90));
-    const theta = THREE.MathUtils.degToRad(timeOfDay);
-    sun.setFromSphericalCoords(1,phi,theta);
-    skyUniforms['sunPosition'].value.copy(sun);
-    sunLight.position.copy(sun).multiplyScalar(50);
-    const brightness = Math.max(0,sun.y);
-    sunLight.intensity = 0.6*brightness;
-    hemiLight.intensity = 0.2+0.5*brightness;
+  const gun = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.25,1.2), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+  body.position.set(0.4,-0.35,-0.6);
+  gun.add(body);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.9,8), new THREE.MeshStandardMaterial({ color:0x111111 }));
+  barrel.rotation.x = Math.PI/2;
+  barrel.position.set(0.8,-0.35,-0.2);
+  gun.add(barrel);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.4,0.15), new THREE.MeshStandardMaterial({ color:0x111111 }));
+  grip.position.set(0.05,-0.6,-0.6);
+  gun.add(grip);
+  gun.position.set(0.6, -0.5, -0.9);
+  camera.add(gun);
+  scene.add(camera);
+
+  let lastShot = 0;
+  const fireRate = 0.12;
+  function doMuzzleFlash(pos){
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12,8,8),
+      new THREE.MeshBasicMaterial({ color:0xffee99, transparent:true, opacity:1 })
+    );
+    m.position.copy(pos);
+    scene.add(m);
+    let t = 0;
+    const interval = setInterval(()=>{
+      t += 0.016;
+      m.scale.setScalar(1 + t*6);
+      m.material.opacity = Math.max(0, 1 - t*3);
+      if(t > 0.2){
+        scene.remove(m);
+        clearInterval(interval);
+      }
+    }, 16);
+  }
+
+  document.addEventListener('mousedown', e=>{
+    if(document.pointerLockElement !== renderer.domElement) return;
+    const now = performance.now()/1000;
+    if(now - lastShot < fireRate) return;
+    lastShot = now;
+    const barrelWorld = new THREE.Vector3();
+    barrel.getWorldPosition(barrelWorld);
+    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+    const muzzlePos = barrelWorld.clone().add(forward.clone().multiplyScalar(1.0));
+    doMuzzleFlash(muzzlePos);
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(objects);
+    if(hits.length > 0){
+      spawnExplosionAt(hits[0].point.clone());
+    } else {
+      const point = camera.position.clone().add(forward.multiplyScalar(500));
+      spawnExplosionAt(point);
+    }
+    const recoil = forward.clone().multiplyScalar(-3);
+    player.explosionVel.add(recoil);
+  });
+
+  function applyExplosionsVisualsAndPhysics(dt){
+    for(let i = explosions.length-1; i >= 0; i--){
+      const ex = explosions[i];
+      ex.time += dt;
+      ex.mesh.scale.setScalar(1 + ex.time*4);
+      ex.mesh.material.opacity = 0.25*(1 - ex.time/0.5);
+      if(ex.time > 0.5){
+        scene.remove(ex.mesh);
+        explosions.splice(i,1);
+      }
+    }
   }
 
   let prevTime = performance.now()/1000;
+  function updateSky(dt){
+    timeOfDay += dt*60;
+    if(timeOfDay > 360) timeOfDay -= 360;
+    const phi = THREE.MathUtils.degToRad(90 - (Math.sin(timeOfDay * Math.PI/180) * 90));
+    const theta = THREE.MathUtils.degToRad(timeOfDay);
+    sun.setFromSphericalCoords(1, phi, theta);
+    skyUniforms['sunPosition'].value.copy(sun);
+    sunLight.position.copy(sun).multiplyScalar(50);
+    sunSphere.position.copy(sun).multiplyScalar(400);
+    const brightness = Math.max(0, sun.y);
+    sunLight.intensity = 0.6 * brightness;
+    hemiLight.intensity = 0.2 + 0.5 * brightness;
+  }
+
   function animate(){
     const now = performance.now()/1000;
-    const dt = Math.min(0.1, now-prevTime);
+    const dt = Math.min(0.1, now - prevTime);
     prevTime = now;
+
+    updateSky(dt);
 
     const dir = getCameraDir();
     const targetSpeed = (keys.run ? player.runCap : PLAYER.walkSpeed);
 
-    if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
-    else player.coyoteTimer -= dt;
+    if(player.grounded) player.coyoteTimer = PLAYER.coyoteTime; else player.coyoteTimer -= dt;
     if(player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
 
     const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
@@ -181,7 +258,7 @@
 
     if(dir.lengthSq() > 0){
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
-      hVel.addScaledVector(dir, accel*dt);
+      hVel.addScaledVector(dir, accel * dt);
       if(hVel.length() > targetSpeed && currentSpeed <= player.runCap){
         hVel.setLength(targetSpeed);
       }
@@ -209,6 +286,8 @@
     }
 
     player.pos.addScaledVector(player.vel, dt);
+    player.pos.addScaledVector(player.explosionVel, dt);
+    player.explosionVel.multiplyScalar(0.95);
 
     if(player.pos.y < PLAYER.eyeHeight){
       player.pos.y = PLAYER.eyeHeight;
@@ -222,28 +301,28 @@
       player.vel.z = (player.vel.z/hSpeed)*PLAYER.maxHSpeed;
       hSpeed = PLAYER.maxHSpeed;
     }
-    if(hSpeed <= PLAYER.walkSpeed-0.5){
+    if(hSpeed <= PLAYER.walkSpeed - 0.5){
       player.vel.x = 0;
       player.vel.z = 0;
       hSpeed = 0;
       player.runCap = PLAYER.runSpeed;
     }
 
-    if(player.pos.x>1000) player.pos.x=-1000;
-    if(player.pos.x<-1000) player.pos.x=1000;
-    if(player.pos.z>1000) player.pos.z=-1000;
-    if(player.pos.z<-1000) player.pos.z=1000;
+    if(player.pos.x > 1000) player.pos.x = -1000;
+    if(player.pos.x < -1000) player.pos.x = 1000;
+    if(player.pos.z > 1000) player.pos.z = -1000;
+    if(player.pos.z < -1000) player.pos.z = 1000;
 
-    applyExplosions(dt);
+    applyExplosionsVisualsAndPhysics(dt);
     updateCamera();
-    updateSky(dt);
     tracker.textContent = `X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}\nSpeed:${hSpeed.toFixed(2)} RunCap:${player.runCap.toFixed(2)}`;
+
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
   }
 
   addEventListener('resize', () => {
-    camera.aspect = innerWidth/innerHeight;
+    camera.aspect = innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
