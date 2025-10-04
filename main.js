@@ -3,7 +3,7 @@
     eyeHeight: 1.65,
     walkSpeed: 3,
     runSpeed: 6,
-    accel: 25,
+    accel: 100,       // horizontal acceleration in m/s²
     airAccel: 12,
     friction: 0.92,
     jumpPower: 5,
@@ -68,29 +68,29 @@
     'KeyA':'left','ArrowLeft':'left',
     'KeyD':'right','ArrowRight':'right',
     'ShiftLeft':'run','ShiftRight':'run',
-    'Space':'jump','KeyP':'toggleLine'
+    'Space':'jump'
   };
 
   addEventListener('keydown',e=>{
     if(keyMap[e.code]){
       keys[keyMap[e.code]]=true;e.preventDefault();
       if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
-      if(keyMap[e.code]==='toggleLine') crossLine.visible=!crossLine.visible;
     }
   });
   addEventListener('keyup',e=>{ if(keyMap[e.code]) keys[keyMap[e.code]]=false; });
 
-  // Pointer lock
+  // Pointer lock overlay
   const overlay=document.getElementById('overlay');
   const startBtn=document.getElementById('startBtn');
-  startBtn.addEventListener('click',()=>{
+  startBtn.addEventListener('click', ()=>{
     renderer.domElement.requestPointerLock();
-    if(!animationStarted){ animate(); animationStarted=true; }
   });
-  document.addEventListener('pointerlockchange',()=>{
+
+  document.addEventListener('pointerlockchange', ()=>{
     overlay.style.display=(document.pointerLockElement===renderer.domElement)?'none':'';
   });
 
+  // Mouse look
   document.addEventListener('mousemove',e=>{
     if(document.pointerLockElement!==renderer.domElement) return;
     const sens=0.0022;
@@ -99,7 +99,7 @@
     player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
   });
 
-  // Debug tracker
+  // HUD
   const tracker = document.createElement('div');
   tracker.style.position='absolute';
   tracker.style.top='10px';
@@ -110,14 +110,6 @@
   tracker.style.fontFamily='monospace';
   tracker.style.whiteSpace='pre';
   document.body.appendChild(tracker);
-
-  // Crosshair line
-  const crossMat=new THREE.LineBasicMaterial({ color:0xffff00 });
-  const crossGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-100)]);
-  const crossLine=new THREE.Line(crossGeo,crossMat);
-  crossLine.visible=false;
-  camera.add(crossLine);
-  scene.add(camera);
 
   function getCameraDir(){
     const f=(keys.forward?1:0)-(keys.back?1:0);
@@ -130,37 +122,42 @@
   }
 
   // Explosions
-  const raycaster=new THREE.Raycaster();
-  const mouse=new THREE.Vector2(0,0);
-  const explosions=[];
-  document.addEventListener('mousedown',()=>{
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2(0,0);
+  const explosions = [];
+  document.addEventListener('mousedown', ()=>{
     if(document.pointerLockElement!==renderer.domElement) return;
     raycaster.setFromCamera(mouse,camera);
-    const hits=raycaster.intersectObjects(objects);
+    const hits = raycaster.intersectObjects(objects);
     if(hits.length>0){
-      const point=hits[0].point.clone();
-      const sphere=new THREE.Mesh(new THREE.SphereGeometry(1,16,16),new THREE.MeshBasicMaterial({ color:0xffdd00, transparent:true, opacity:0.25 }));
+      const point = hits[0].point.clone();
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(1,16,16),
+        new THREE.MeshBasicMaterial({ color:0xffdd00, transparent:true, opacity:0.25 })
+      );
       sphere.position.copy(point);
       scene.add(sphere);
-      explosions.push({mesh:sphere,time:0});
+      explosions.push({mesh:sphere,time:0,point:point});
 
-      // Spherical force (no upward bias)
+      // Apply spherical force to player
       const toPlayer = player.pos.clone().sub(point);
-      const dist = Math.max(0.5,toPlayer.length());
-      toPlayer.normalize();
-      const power = 120;
-      player.vel.add(toPlayer.multiplyScalar(power/dist));
+      const dist = toPlayer.length();
+      if(dist < 50){
+        const force = (50-dist)/50 * 120; // scale force based on distance within 50m radius
+        toPlayer.normalize();
+        player.vel.add(toPlayer.multiplyScalar(force));
+      }
     }
   });
 
-  let prevTime=performance.now()/1000;
+  let prevTime = performance.now()/1000;
   function animate(){
-    const now=performance.now()/1000;
-    const dt=Math.min(0.1,now-prevTime);
-    prevTime=now;
+    const now = performance.now()/1000;
+    const dt = Math.min(0.1, now-prevTime);
+    prevTime = now;
 
-    const dir=getCameraDir();
-    const targetSpeed=(keys.run?PLAYER.runSpeed:PLAYER.walkSpeed);
+    const dir = getCameraDir();
+    const targetSpeed = (keys.run?PLAYER.runSpeed:PLAYER.walkSpeed);
 
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
@@ -168,28 +165,29 @@
     // Horizontal velocity with dynamic run cap
     const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
-      const accel = player.grounded?PLAYER.accel:PLAYER.airAccel;
+      const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
       hVel.addScaledVector(dir,accel*dt);
-
-      if(player.grounded && hVel.length() > player.runCap){
+      // Clamp to run cap
+      if(hVel.length() > player.runCap){
         hVel.setLength(player.runCap);
       }
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
     }
-    player.vel.x=hVel.x;
-    player.vel.z=hVel.z;
+    player.vel.x = hVel.x;
+    player.vel.z = hVel.z;
 
     // Gravity
-    player.vel.y += PLAYER.gravity*dt;
+    player.vel.y += PLAYER.gravity * dt;
 
     // Jump
     if(player.jumpBufferTimer>0 && (player.grounded || player.coyoteTimer>0)){
       player.grounded=false;
       player.jumpBufferTimer=0;
 
-      const hv=new THREE.Vector3(player.vel.x,0,player.vel.z).multiplyScalar(PLAYER.jumpBoost);
-      player.vel.x=hv.x; player.vel.z=hv.z;
+      const hv = new THREE.Vector3(player.vel.x,0,player.vel.z).multiplyScalar(PLAYER.jumpBoost);
+      player.vel.x = hv.x;
+      player.vel.z = hv.z;
 
       const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
       const flatten = Math.min(hSpeed*0.08, PLAYER.jumpPower*0.6);
@@ -199,7 +197,7 @@
       player.runCap *= 1.05;
     }
 
-    // Reset run cap if speed <= walk speed
+    // Reset run cap if speed ≤ walk
     const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
     if(currentH <= PLAYER.walkSpeed){
       player.runCap = PLAYER.runSpeed;
@@ -232,20 +230,20 @@
       }
     }
 
-    // Update camera & tracker
+    // Update camera & HUD
     updateCamera();
-    tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${currentH.toFixed(2)}  RunCap:${player.runCap.toFixed(2)}`;
+    tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${currentH.toFixed(2)} RunCap: ${player.runCap.toFixed(2)}`;
 
     renderer.render(scene,camera);
     requestAnimationFrame(animate);
   }
 
+  // Start animation loop immediately
+  if(!animationStarted){ animate(); animationStarted=true; }
+
   addEventListener('resize',()=>{
-    camera.aspect=innerWidth/innerHeight;
+    camera.aspect = innerWidth/innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth,innerHeight);
   });
 })();
-
-  player.runCap = PLAYER.runSpeed;
-}
