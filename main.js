@@ -57,10 +57,14 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     grounded:true,
     coyoteTimer:0,
     jumpBufferTimer:0,
-    runCap: PLAYER.runSpeed
+    runCap: PLAYER.runSpeed,
+    prevYaw: 0
   };
 
-  function updateCamera(){ camera.position.copy(player.pos); camera.rotation.set(player.pitch,player.yaw,0,"ZYX"); }
+  function updateCamera(){ 
+    camera.position.copy(player.pos); 
+    camera.rotation.set(player.pitch,player.yaw,0,"ZYX"); 
+  }
 
   // Input
   const keys={};
@@ -150,7 +154,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
 
   // Animation
   let prevTime = performance.now()/1000;
-  window.animate = function animate(){ // expose globally
+  window.animate = function animate(){
     const now = performance.now()/1000;
     const dt = Math.min(0.1, now-prevTime);
     prevTime = now;
@@ -161,20 +165,33 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Horizontal velocity
-    const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
-    if(dir.lengthSq()>0){
+    // --- LOCK HORIZONTAL VELOCITY TO CAMERA ---
+    const yawDelta = player.yaw - player.prevYaw;
+    const horizVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
+    horizVel.applyAxisAngle(new THREE.Vector3(0,1,0), yawDelta); // rotate with camera
+    player.vel.x = horizVel.x;
+    player.vel.z = horizVel.z;
+    player.prevYaw = player.yaw;
+
+    // Apply input acceleration
+    if(dir.lengthSq() > 0){
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
-      hVel.addScaledVector(dir,accel*dt);
-      if(hVel.length() > player.runCap) hVel.setLength(player.runCap);
+      player.vel.x += dir.x*accel*dt;
+      player.vel.z += dir.z*accel*dt;
+
+      // Clamp to runCap
+      const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+      if(hSpeed > player.runCap){
+        player.vel.x = (player.vel.x/hSpeed)*player.runCap;
+        player.vel.z = (player.vel.z/hSpeed)*player.runCap;
+      }
     } else if(player.grounded){
-      hVel.multiplyScalar(PLAYER.friction);
+      player.vel.x *= PLAYER.friction;
+      player.vel.z *= PLAYER.friction;
     }
-    player.vel.x = hVel.x;
-    player.vel.z = hVel.z;
 
     // Gravity
-    player.vel.y += PLAYER.gravity * dt;
+    player.vel.y += PLAYER.gravity*dt;
 
     // Jump
     if(player.jumpBufferTimer>0 && (player.grounded || player.coyoteTimer>0)){
@@ -192,13 +209,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
       player.runCap *= 1.05;
     }
 
+    // Reset runCap if moving slowly
     const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
-    if(currentH <= PLAYER.walkSpeed){
-      player.runCap = PLAYER.runSpeed;
-    }
+    if(currentH <= PLAYER.walkSpeed) player.runCap = PLAYER.runSpeed;
 
     player.pos.addScaledVector(player.vel, dt);
 
+    // Ground collision
     if(player.pos.y < PLAYER.eyeHeight){
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
