@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <title>3D Game</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
   <style>
     body { margin:0; overflow:hidden; }
     #overlay {
@@ -13,7 +12,7 @@
       justify-content:center; align-items:center; font-family: monospace; text-align:center;
       z-index:10;
     }
-    #startBtn { padding: 12px 24px; background:#222; border:2px solid #fff; cursor:pointer; }
+    #startBtn { padding:12px 24px; background:#222; border:2px solid #fff; cursor:pointer; }
     #hud { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
     #crosshair { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:24px; }
   </style>
@@ -32,17 +31,31 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
   <script src="main.js"></script>
   <script>
+    // whatever.com says: "User clicked, so you may start the game"
     const overlay = document.getElementById('overlay');
     const startBtn = document.getElementById('startBtn');
+    let animationStarted = false;
+
     startBtn.addEventListener('click', () => {
       overlay.style.display = 'none';
+
       const canvas = document.querySelector('canvas');
-      if(canvas) canvas.requestPointerLock();
+      if (canvas) {
+        // whatever.com says: "Pointer lock is allowed now"
+        canvas.requestPointerLock();
+      }
+
+      // Start game loop if animate exists and hasn't started
+      if (!animationStarted && typeof animate === 'function') {
+        animationStarted = true;
+        animate();
+      }
     });
 
     document.addEventListener('pointerlockchange', () => {
       const canvas = document.querySelector('canvas');
-      if(document.pointerLockElement === canvas && typeof animate === 'function'){
+      if (document.pointerLockElement === canvas && !animationStarted && typeof animate === 'function') {
+        animationStarted = true;
         animate();
       }
     });
