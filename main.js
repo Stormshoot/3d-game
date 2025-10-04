@@ -3,7 +3,7 @@
     eyeHeight: 1.65,
     walkSpeed: 3,
     runSpeed: 6,
-    accel: 100,       // horizontal acceleration in m/s²
+    accel: 100,
     airAccel: 12,
     friction: 0.92,
     jumpPower: 5,
@@ -76,19 +76,19 @@
       keys[keyMap[e.code]]=true;e.preventDefault();
       if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
+    // Press E to start
+    if(e.code==='KeyE' && !animationStarted){
+      renderer.domElement.requestPointerLock();
+      animate();
+      animationStarted=true;
+      overlay.style.display='none';
+    }
   });
   addEventListener('keyup',e=>{ if(keyMap[e.code]) keys[keyMap[e.code]]=false; });
 
-  // Pointer lock overlay
+  // Overlay (just visual)
   const overlay=document.getElementById('overlay');
-  const startBtn=document.getElementById('startBtn');
-  startBtn.addEventListener('click', ()=>{
-    renderer.domElement.requestPointerLock();
-  });
-
-  document.addEventListener('pointerlockchange', ()=>{
-    overlay.style.display=(document.pointerLockElement===renderer.domElement)?'none':'';
-  });
+  overlay.style.display='block';
 
   // Mouse look
   document.addEventListener('mousemove',e=>{
@@ -139,11 +139,11 @@
       scene.add(sphere);
       explosions.push({mesh:sphere,time:0,point:point});
 
-      // Apply spherical force to player
+      // Spherical force on player
       const toPlayer = player.pos.clone().sub(point);
       const dist = toPlayer.length();
       if(dist < 50){
-        const force = (50-dist)/50 * 120; // scale force based on distance within 50m radius
+        const force = (50-dist)/50 * 120;
         toPlayer.normalize();
         player.vel.add(toPlayer.multiplyScalar(force));
       }
@@ -162,15 +162,12 @@
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Horizontal velocity with dynamic run cap
+    // Horizontal velocity
     const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
       hVel.addScaledVector(dir,accel*dt);
-      // Clamp to run cap
-      if(hVel.length() > player.runCap){
-        hVel.setLength(player.runCap);
-      }
+      if(hVel.length() > player.runCap) hVel.setLength(player.runCap);
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
     }
@@ -193,7 +190,6 @@
       const flatten = Math.min(hSpeed*0.08, PLAYER.jumpPower*0.6);
       player.vel.y = PLAYER.jumpPower - flatten;
 
-      // multiply run cap by 1.05 each jump
       player.runCap *= 1.05;
     }
 
@@ -219,7 +215,7 @@
     if(player.pos.z > WORLD_SIZE/2) player.pos.z -= WORLD_SIZE;
     if(player.pos.z < -WORLD_SIZE/2) player.pos.z += WORLD_SIZE;
 
-    // Explosion visuals
+    // Explosions visuals
     for(let i=explosions.length-1;i>=0;i--){
       explosions[i].time += dt;
       explosions[i].mesh.scale.setScalar(1 + explosions[i].time*4);
@@ -230,16 +226,13 @@
       }
     }
 
-    // Update camera & HUD
+    // Camera & HUD
     updateCamera();
     tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${currentH.toFixed(2)} RunCap: ${player.runCap.toFixed(2)}`;
 
     renderer.render(scene,camera);
     requestAnimationFrame(animate);
   }
-
-  // Start animation loop immediately
-  if(!animationStarted){ animate(); animationStarted=true; }
 
   addEventListener('resize',()=>{
     camera.aspect = innerWidth/innerHeight;
