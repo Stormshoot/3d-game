@@ -9,7 +9,7 @@
     jumpPower: 5,
     jumpBoost: 1.05,
     gravity: -9.81,
-    maxHSpeed: 100,
+    maxHSpeed: 128,
     coyoteTime: 0.25,
     jumpBuffer: 0.2
   };
@@ -49,7 +49,8 @@
   // Player
   const player = {
     pos:new THREE.Vector3(0,PLAYER.eyeHeight,0),
-    vel:new THREE.Vector3(),
+    vel:new THREE.Vector3(),          // camera-aligned movement
+    explosionVel:new THREE.Vector3(), // velocity from explosions
     yaw:0,
     pitch:0,
     grounded:true,
@@ -138,13 +139,13 @@
       scene.add(sphere);
       explosions.push({mesh:sphere,time:0,point:point});
 
-      // Spherical force on player
+      // Spherical force added to explosionVel
       const toPlayer = player.pos.clone().sub(point);
       const dist = toPlayer.length();
       if(dist < 50){
         const force = (50-dist)/50 * 120;
         toPlayer.normalize();
-        player.vel.add(toPlayer.multiplyScalar(force));
+        player.explosionVel.add(toPlayer.multiplyScalar(force));
       }
     }
   });
@@ -161,7 +162,7 @@
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Horizontal velocity (camera-aligned)
+    // Camera-aligned horizontal velocity
     const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
@@ -171,11 +172,14 @@
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
     }
+    // Rotate to camera direction while keeping magnitude
+    const hSpeed = hVel.length();
+    hVel.copy(dir.lengthSq()>0 ? dir.clone().multiplyScalar(hSpeed) : hVel);
     player.vel.x = hVel.x;
     player.vel.z = hVel.z;
 
     // Gravity
-    player.vel.y += PLAYER.gravity * dt;
+    player.vel.y += PLAYER.gravity*dt;
 
     // Jump
     if(player.jumpBufferTimer>0 && (player.grounded || player.coyoteTimer>0)){
@@ -183,11 +187,11 @@
       player.jumpBufferTimer=0;
 
       const camDir = getCameraDir();
-      const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
-      player.vel.x = camDir.x * hSpeed * PLAYER.jumpBoost;
-      player.vel.z = camDir.z * hSpeed * PLAYER.jumpBoost;
+      const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+      player.vel.x = camDir.x * currentH * PLAYER.jumpBoost;
+      player.vel.z = camDir.z * currentH * PLAYER.jumpBoost;
 
-      const flatten = Math.min(hSpeed*0.08, PLAYER.jumpPower*0.6);
+      const flatten = Math.min(currentH*0.08, PLAYER.jumpPower*0.6);
       player.vel.y = PLAYER.jumpPower - flatten;
 
       player.runCap *= 1.05;
@@ -201,6 +205,10 @@
 
     // Update position
     player.pos.addScaledVector(player.vel, dt);
+    player.pos.addScaledVector(player.explosionVel, dt);
+
+    // Decay explosion velocity
+    player.explosionVel.multiplyScalar(0.95);
 
     // Ground collision
     if(player.pos.y < PLAYER.eyeHeight){
