@@ -1,64 +1,46 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>3D Game</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { margin:0; overflow:hidden; }
-    #overlay {
-      position:absolute; top:0; left:0; width:100%; height:100%;
-      background: rgba(0,0,0,0.7); color:#fff; display:flex; flex-direction:column;
-      justify-content:center; align-items:center; font-family: monospace; text-align:center;
-      z-index:10;
-    }
-    #startBtn { padding:12px 24px; background:#222; border:2px solid #fff; cursor:pointer; }
-    #hud { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
-    #crosshair { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:24px; }
-  </style>
+<meta charset="UTF-8">
+<title>3D Game</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body { margin:0; overflow:hidden; }
+  #overlay {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    background: rgba(0,0,0,0.7); color:#fff; display:flex;
+    justify-content:center; align-items:center; flex-direction:column;
+    font-family: monospace; z-index:10;
+  }
+  #startBtn { padding: 12px 24px; cursor:pointer; background:#222; border:2px solid #fff; }
+</style>
 </head>
 <body>
-  <div id="overlay">
-    <h1>3D Game</h1>
-    <p>Click to lock pointer. WASD to move, Space to jump, Shift to run.</p>
-    <button id="startBtn">Click to start</button>
-    <p class="hint">Tip: Jumping increases speed.</p>
-  </div>
-  <div id="hud">
-    <div id="crosshair">+</div>
-  </div>
+<div id="overlay">
+  <h1>3D Game</h1>
+  <button id="startBtn">Click to Start</button>
+  <p>Use WASD + Space + Shift</p>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <script src="main.js"></script>
-  <script>
-    // whatever.com says: "User clicked, so you may start the game"
-    const overlay = document.getElementById('overlay');
-    const startBtn = document.getElementById('startBtn');
-    let animationStarted = false;
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="main.js"></script>
+<script>
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
 
-    startBtn.addEventListener('click', () => {
-      overlay.style.display = 'none';
+startBtn.onclick = () => {
+  overlay.style.display = 'none';
+  const canvas = document.querySelector('canvas');
+  if(canvas) canvas.requestPointerLock();
+};
 
-      const canvas = document.querySelector('canvas');
-      if (canvas) {
-        // whatever.com says: "Pointer lock is allowed now"
-        canvas.requestPointerLock();
-      }
-
-      // Start game loop if animate exists and hasn't started
-      if (!animationStarted && typeof animate === 'function') {
-        animationStarted = true;
-        animate();
-      }
-    });
-
-    document.addEventListener('pointerlockchange', () => {
-      const canvas = document.querySelector('canvas');
-      if (document.pointerLockElement === canvas && !animationStarted && typeof animate === 'function') {
-        animationStarted = true;
-        animate();
-      }
-    });
-  </script>
+// If pointer lock is gained, start animation if it's defined
+document.addEventListener('pointerlockchange', () => {
+  const canvas = document.querySelector('canvas');
+  if(document.pointerLockElement === canvas && typeof animate === 'function'){
+    animate();
+  }
+});
+</script>
 </body>
 </html>
