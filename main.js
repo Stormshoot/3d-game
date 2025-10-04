@@ -24,19 +24,17 @@
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  // Lighting
   scene.add(new THREE.HemisphereLight(0xffffff,0x444444,0.7));
   const sun = new THREE.DirectionalLight(0xffffff,0.6);
   sun.position.set(5,10,5);
   scene.add(sun);
 
-  // Ground
   const texLoader = new THREE.TextureLoader();
   const groundTex = texLoader.load("https://threejs.org/examples/textures/checker.png");
   groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
   groundTex.repeat.set(400,400);
   groundTex.magFilter = THREE.NearestFilter;
-  groundTex.minFilter = THREE.LinearMipMapLinearFilter;
+  groundTex.minFilter = THREE.NearestFilter;
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD_SIZE,WORLD_SIZE),
@@ -46,7 +44,6 @@
   scene.add(ground);
   const objects = [ground];
 
-  // Player
   const player = {
     pos:new THREE.Vector3(0,PLAYER.eyeHeight,0),
     vel:new THREE.Vector3(),
@@ -61,7 +58,6 @@
 
   function updateCamera(){ camera.position.copy(player.pos); camera.rotation.set(player.pitch,player.yaw,0,"ZYX"); }
 
-  // Input
   const keys={};
   const keyMap={
     'KeyW':'forward','ArrowUp':'forward',
@@ -73,7 +69,6 @@
   };
 
   addEventListener('keydown',e=>{
-    if(e.ctrlKey) return; // ignore Ctrl-modified keys
     if(keyMap[e.code]){
       keys[keyMap[e.code]]=true; e.preventDefault();
       if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
@@ -87,11 +82,18 @@
   });
   addEventListener('keyup',e=>{ if(keyMap[e.code]) keys[keyMap[e.code]]=false; });
 
-  // Overlay
   const overlay=document.getElementById('overlay');
   overlay.style.display='block';
+  overlay.addEventListener('click', ()=>renderer.domElement.requestPointerLock());
 
-  // Mouse look
+  document.addEventListener('pointerlockchange', ()=>{
+    overlay.style.display = (document.pointerLockElement===renderer.domElement)?'none':'block';
+    if(document.pointerLockElement===renderer.domElement && !animationStarted){
+      animate();
+      animationStarted=true;
+    }
+  });
+
   document.addEventListener('mousemove',e=>{
     if(document.pointerLockElement!==renderer.domElement) return;
     const sens=0.0022;
@@ -100,7 +102,6 @@
     player.pitch = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, player.pitch));
   });
 
-  // HUD
   const tracker = document.createElement('div');
   tracker.style.position='absolute';
   tracker.style.top='10px';
@@ -122,7 +123,6 @@
     return dir;
   }
 
-  // Explosions
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2(0,0);
   const explosions = [];
@@ -139,7 +139,6 @@
       sphere.position.copy(point);
       scene.add(sphere);
       explosions.push({mesh:sphere,time:0,point:point});
-
       const toPlayer = player.pos.clone().sub(point);
       const dist = toPlayer.length();
       if(dist < 50){
@@ -181,22 +180,17 @@
     if(player.jumpBufferTimer>0 && (player.grounded || player.coyoteTimer>0)){
       player.grounded=false;
       player.jumpBufferTimer=0;
-
       const camDir = getCameraDir();
       const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
       player.vel.x = camDir.x * currentH * PLAYER.jumpBoost;
       player.vel.z = camDir.z * currentH * PLAYER.jumpBoost;
-
       const flatten = Math.min(currentH*0.08, PLAYER.jumpPower*0.6);
       player.vel.y = PLAYER.jumpPower - flatten;
-
       player.runCap *= 1.05;
     }
 
     const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
-    if(currentH <= PLAYER.walkSpeed){
-      player.runCap = PLAYER.runSpeed;
-    }
+    if(currentH <= PLAYER.walkSpeed) player.runCap = PLAYER.runSpeed;
 
     player.pos.addScaledVector(player.vel, dt);
     player.pos.addScaledVector(player.explosionVel, dt);
