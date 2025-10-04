@@ -1,3 +1,5 @@
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
+
 (() => {
   const PLAYER = {
     eyeHeight: 1.65,
@@ -76,19 +78,16 @@
       keys[keyMap[e.code]]=true;e.preventDefault();
       if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
-    // Press E to start
-    if(e.code==='KeyE' && !animationStarted){
-      renderer.domElement.requestPointerLock();
-      animate();
-      animationStarted=true;
-      overlay.style.display='none';
-    }
   });
   addEventListener('keyup',e=>{ if(keyMap[e.code]) keys[keyMap[e.code]]=false; });
 
-  // Overlay (just visual)
+  // Overlay
   const overlay=document.getElementById('overlay');
-  overlay.style.display='block';
+  const startBtn=document.getElementById('startBtn');
+  startBtn.addEventListener('click', () => {
+    overlay.style.display='none';
+    renderer.domElement.requestPointerLock();
+  });
 
   // Mouse look
   document.addEventListener('mousemove',e=>{
@@ -122,9 +121,9 @@
   }
 
   // Explosions
+  const explosions = [];
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2(0,0);
-  const explosions = [];
   document.addEventListener('mousedown', ()=>{
     if(document.pointerLockElement!==renderer.domElement) return;
     raycaster.setFromCamera(mouse,camera);
@@ -139,7 +138,6 @@
       scene.add(sphere);
       explosions.push({mesh:sphere,time:0,point:point});
 
-      // Spherical force on player
       const toPlayer = player.pos.clone().sub(point);
       const dist = toPlayer.length();
       if(dist < 50){
@@ -150,8 +148,9 @@
     }
   });
 
+  // Animation
   let prevTime = performance.now()/1000;
-  function animate(){
+  window.animate = function animate(){ // expose globally
     const now = performance.now()/1000;
     const dt = Math.min(0.1, now-prevTime);
     prevTime = now;
@@ -193,16 +192,13 @@
       player.runCap *= 1.05;
     }
 
-    // Reset run cap if speed ≤ walk
     const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
     if(currentH <= PLAYER.walkSpeed){
       player.runCap = PLAYER.runSpeed;
     }
 
-    // Update position
     player.pos.addScaledVector(player.vel, dt);
 
-    // Ground collision
     if(player.pos.y < PLAYER.eyeHeight){
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
@@ -226,13 +222,20 @@
       }
     }
 
-    // Camera & HUD
     updateCamera();
     tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${currentH.toFixed(2)} RunCap: ${player.runCap.toFixed(2)}`;
 
     renderer.render(scene,camera);
     requestAnimationFrame(animate);
-  }
+  };
+
+  // Start animation on pointer lock
+  document.addEventListener('pointerlockchange', () => {
+    if(document.pointerLockElement === renderer.domElement && !animationStarted){
+      animate();
+      animationStarted = true;
+    }
+  });
 
   addEventListener('resize',()=>{
     camera.aspect = innerWidth/innerHeight;
