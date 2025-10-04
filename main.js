@@ -75,14 +75,17 @@
   const keys = {};
   const keyMap = {'KeyW':'forward','ArrowUp':'forward','KeyS':'back','ArrowDown':'back','KeyA':'left','ArrowLeft':'left','KeyD':'right','ArrowRight':'right','ShiftLeft':'run','ShiftRight':'run','Space':'jump'};
 
-  let started=false;
   addEventListener('keydown', e=>{
-    if(e.code==='KeyE' && !started){started=true; renderer.domElement.requestPointerLock();}
-    if(keyMap[e.code]){keys[keyMap[e.code]]=true; e.preventDefault(); if(keyMap[e.code]==='jump') player.jumpBufferTimer=PLAYER.jumpBuffer;}
+    if(keyMap[e.code]){
+      keys[keyMap[e.code]]=true;
+      e.preventDefault();
+      if(keyMap[e.code]==='jump') player.jumpBufferTimer=PLAYER.jumpBuffer;
+    }
   });
   addEventListener('keyup', e=>{if(keyMap[e.code]) keys[keyMap[e.code]]=false;});
 
-  document.addEventListener('pointerlockchange',()=>{});
+  renderer.domElement.requestPointerLock();
+
   document.addEventListener('mousemove', e=>{
     if(document.pointerLockElement!==renderer.domElement) return;
     const sens=0.0022;
@@ -183,7 +186,7 @@
   let prevTime=performance.now()/1000;
   function animate(){
     requestAnimationFrame(animate);
-    if(!started || document.pointerLockElement!==renderer.domElement) return;
+    if(document.pointerLockElement!==renderer.domElement) return;
     const now=performance.now()/1000;
     const dt=Math.min(0.1,now-prevTime); prevTime=now;
 
@@ -198,7 +201,6 @@
     const brightness=Math.max(0,sun.y);
     sunLight.intensity=0.6*brightness; hemi.intensity=0.2+0.5*brightness;
 
-    // Movement logic
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime;
     else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
@@ -240,20 +242,23 @@
     if(player.pos.z>wrapLimit) player.pos.z=-wrapLimit;
     if(player.pos.z<-wrapLimit) player.pos.z=wrapLimit;
 
-    if(player.pos.y<PLAYER.eyeHeight){player.pos.y=PLAYER.eyeHeight; player.vel.y=0; player.grounded=true;}
-    else player.grounded=false;
+    if(player.pos.y<PLAYER.eyeHeight){player.pos.y=PLAYER.eyeHeight;player.vel.y=0;player.grounded=true;} else player.grounded=false;
 
     let hSpeed=Math.sqrt(player.vel.x*player.vel.x+player.vel.z*player.vel.z);
-    if(hSpeed>player.runCap){player.vel.x=(player.vel.x/hSpeed)*player.runCap; player.vel.z=(player.vel.z/hSpeed)*player.runCap; hSpeed=player.runCap;}
-    if(hSpeed<=PLAYER.walkSpeed) player.runCap=PLAYER.runSpeed;
-    player.explosionVel.multiplyScalar(0.9);
+    if(hSpeed>PLAYER.maxHSpeed){player.vel.x=player.vel.x/hSpeed*PLAYER.maxHSpeed;player.vel.z=player.vel.z/hSpeed*PLAYER.maxHSpeed;hSpeed=PLAYER.maxHSpeed;}
+    if(hSpeed<=PLAYER.walkSpeed-0.5){player.vel.x=0;player.vel.z=0;hSpeed=0;player.runCap=PLAYER.runSpeed;}
+    player.explosionVel.multiplyScalar(0.92);
 
     applyExplosions(dt);
     updateCamera();
-    tracker.textContent=`X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}\nSpeed:${hSpeed.toFixed(2)} Run:${keys.run?1:0}`;
+    tracker.textContent=`X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}\nSpeed:${hSpeed.toFixed(2)} runCap:${player.runCap.toFixed(2)}`;
     renderer.render(scene,camera);
   }
-
-  addEventListener('resize',()=>{camera.aspect=innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight);});
   animate();
+
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
 })();
