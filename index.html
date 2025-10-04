@@ -1,40 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <title>3D Game</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body { margin:0; overflow:hidden; }
+  body { margin:0; overflow:hidden; font-family: monospace; }
   #overlay {
-    position:absolute; top:0; left:0; width:100%; height:100%;
-    background: rgba(0,0,0,0.7); color:#fff; display:flex;
-    justify-content:center; align-items:center; flex-direction:column;
-    font-family: monospace; z-index:10;
+    position: fixed; /* fixed so it always covers viewport */
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    text-align: center;
+    z-index: 10;
   }
-  #startBtn { padding: 12px 24px; cursor:pointer; background:#222; border:2px solid #fff; }
+  #startBtn {
+    padding: 12px 24px;
+    background:#222;
+    border:2px solid #fff;
+    cursor:pointer;
+    font-size: 18px;
+    margin-top: 12px;
+  }
+  #hud { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+  #crosshair { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:24px; }
 </style>
 </head>
 <body>
+
 <div id="overlay">
   <h1>3D Game</h1>
-  <button id="startBtn">Click to Start</button>
-  <p>Use WASD + Space + Shift</p>
+  <p>Click to lock pointer. WASD to move, Space to jump, Shift to run.</p>
+  <button id="startBtn">Click to start</button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<div id="hud">
+  <div id="crosshair">+</div>
+</div>
+
+<!-- Three.js r150 ensures THREE.Sky works -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
 <script src="main.js"></script>
+
 <script>
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
 
-startBtn.onclick = () => {
+startBtn.addEventListener('click', () => {
   overlay.style.display = 'none';
   const canvas = document.querySelector('canvas');
   if(canvas) canvas.requestPointerLock();
-};
+});
 
-// If pointer lock is gained, start animation if it's defined
+// Start game automatically on pointer lock
 document.addEventListener('pointerlockchange', () => {
   const canvas = document.querySelector('canvas');
   if(document.pointerLockElement === canvas && typeof animate === 'function'){
@@ -42,5 +65,6 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 </script>
+
 </body>
 </html>
