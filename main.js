@@ -76,7 +76,6 @@
       keys[keyMap[e.code]]=true;e.preventDefault();
       if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
-    // Press E to start
     if(e.code==='KeyE' && !animationStarted){
       renderer.domElement.requestPointerLock();
       animate();
@@ -86,7 +85,7 @@
   });
   addEventListener('keyup',e=>{ if(keyMap[e.code]) keys[keyMap[e.code]]=false; });
 
-  // Overlay (just visual)
+  // Overlay
   const overlay=document.getElementById('overlay');
   overlay.style.display='block';
 
@@ -162,11 +161,12 @@
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Horizontal velocity
+    // Horizontal velocity (camera-aligned)
     const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
-      hVel.addScaledVector(dir,accel*dt);
+      const added = dir.clone().multiplyScalar(accel*dt);
+      hVel.add(added);
       if(hVel.length() > player.runCap) hVel.setLength(player.runCap);
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
@@ -182,11 +182,11 @@
       player.grounded=false;
       player.jumpBufferTimer=0;
 
-      const hv = new THREE.Vector3(player.vel.x,0,player.vel.z).multiplyScalar(PLAYER.jumpBoost);
-      player.vel.x = hv.x;
-      player.vel.z = hv.z;
-
+      const camDir = getCameraDir();
       const hSpeed = Math.sqrt(player.vel.x**2 + player.vel.z**2);
+      player.vel.x = camDir.x * hSpeed * PLAYER.jumpBoost;
+      player.vel.z = camDir.z * hSpeed * PLAYER.jumpBoost;
+
       const flatten = Math.min(hSpeed*0.08, PLAYER.jumpPower*0.6);
       player.vel.y = PLAYER.jumpPower - flatten;
 
@@ -215,7 +215,7 @@
     if(player.pos.z > WORLD_SIZE/2) player.pos.z -= WORLD_SIZE;
     if(player.pos.z < -WORLD_SIZE/2) player.pos.z += WORLD_SIZE;
 
-    // Explosions visuals
+    // Explosion visuals
     for(let i=explosions.length-1;i>=0;i--){
       explosions[i].time += dt;
       explosions[i].mesh.scale.setScalar(1 + explosions[i].time*4);
