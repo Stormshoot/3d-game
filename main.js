@@ -8,8 +8,8 @@
     friction: 0.92,
     jumpPower: 5,
     jumpBoost: 1.05,
-    gravity: -19.62,
-    maxHSpeed: 128,
+    gravity: -19.62, // stronger gravity
+    maxHSpeed: 100,
     coyoteTime: 0.25,
     jumpBuffer: 0.2
   };
@@ -49,8 +49,8 @@
   // Player
   const player = {
     pos:new THREE.Vector3(0,PLAYER.eyeHeight,0),
-    vel:new THREE.Vector3(),          // camera-aligned movement
-    explosionVel:new THREE.Vector3(), // velocity from explosions
+    vel:new THREE.Vector3(),
+    explosionVel:new THREE.Vector3(),
     yaw:0,
     pitch:0,
     grounded:true,
@@ -73,8 +73,9 @@
   };
 
   addEventListener('keydown',e=>{
+    if(e.ctrlKey) return; // ignore Ctrl-modified keys
     if(keyMap[e.code]){
-      keys[keyMap[e.code]]=true;e.preventDefault();
+      keys[keyMap[e.code]]=true; e.preventDefault();
       if(keyMap[e.code]==='jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
     if(e.code==='KeyE' && !animationStarted){
@@ -139,7 +140,6 @@
       scene.add(sphere);
       explosions.push({mesh:sphere,time:0,point:point});
 
-      // Spherical force added to explosionVel
       const toPlayer = player.pos.clone().sub(point);
       const dist = toPlayer.length();
       if(dist < 50){
@@ -162,7 +162,6 @@
     if(player.grounded) player.coyoteTimer=PLAYER.coyoteTime; else player.coyoteTimer-=dt;
     if(player.jumpBufferTimer>0) player.jumpBufferTimer-=dt;
 
-    // Camera-aligned horizontal velocity
     const hVel = new THREE.Vector3(player.vel.x,0,player.vel.z);
     if(dir.lengthSq()>0){
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
@@ -172,16 +171,13 @@
     } else if(player.grounded){
       hVel.multiplyScalar(PLAYER.friction);
     }
-    // Rotate to camera direction while keeping magnitude
     const hSpeed = hVel.length();
     hVel.copy(dir.lengthSq()>0 ? dir.clone().multiplyScalar(hSpeed) : hVel);
     player.vel.x = hVel.x;
     player.vel.z = hVel.z;
 
-    // Gravity
     player.vel.y += PLAYER.gravity*dt;
 
-    // Jump
     if(player.jumpBufferTimer>0 && (player.grounded || player.coyoteTimer>0)){
       player.grounded=false;
       player.jumpBufferTimer=0;
@@ -197,33 +193,26 @@
       player.runCap *= 1.05;
     }
 
-    // Reset run cap if speed ≤ walk
     const currentH = Math.sqrt(player.vel.x**2 + player.vel.z**2);
     if(currentH <= PLAYER.walkSpeed){
       player.runCap = PLAYER.runSpeed;
     }
 
-    // Update position
     player.pos.addScaledVector(player.vel, dt);
     player.pos.addScaledVector(player.explosionVel, dt);
-
-    // Decay explosion velocity
     player.explosionVel.multiplyScalar(0.95);
 
-    // Ground collision
     if(player.pos.y < PLAYER.eyeHeight){
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
       player.grounded=true;
     } else player.grounded=false;
 
-    // World wrap
     if(player.pos.x > WORLD_SIZE/2) player.pos.x -= WORLD_SIZE;
     if(player.pos.x < -WORLD_SIZE/2) player.pos.x += WORLD_SIZE;
     if(player.pos.z > WORLD_SIZE/2) player.pos.z -= WORLD_SIZE;
     if(player.pos.z < -WORLD_SIZE/2) player.pos.z += WORLD_SIZE;
 
-    // Explosion visuals
     for(let i=explosions.length-1;i>=0;i--){
       explosions[i].time += dt;
       explosions[i].mesh.scale.setScalar(1 + explosions[i].time*4);
@@ -234,7 +223,6 @@
       }
     }
 
-    // Camera & HUD
     updateCamera();
     tracker.textContent=`X: ${player.pos.x.toFixed(2)} Y: ${player.pos.y.toFixed(2)} Z: ${player.pos.z.toFixed(2)}\nSpeed: ${currentH.toFixed(2)} RunCap: ${player.runCap.toFixed(2)}`;
 
