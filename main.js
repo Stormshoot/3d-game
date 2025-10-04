@@ -8,9 +8,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     accel: 100,
     airAccel: 12,
     friction: 0.92,
-    jumpPower: 5,
-    jumpBoost: 1.05,
-    gravity: -9.81,
+    jumpPower: 10,
+    jumpBoost: 1.03,
+    gravity: -40,
     maxHSpeed: 100,
     coyoteTime: 0.25,
     jumpBuffer: 0.2
