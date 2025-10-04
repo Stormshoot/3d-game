@@ -8,7 +8,7 @@
     friction: 0.92,
     jumpPower: 5,
     jumpBoost: 1.05,
-    gravity: -9.81,
+    gravity: -19.62,
     maxHSpeed: 128,
     coyoteTime: 0.25,
     jumpBuffer: 0.2
