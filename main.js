@@ -58,7 +58,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     coyoteTimer: 0,
     jumpBufferTimer: 0,
     runCap: PLAYER.runSpeed,
-    fallStartY: 0
+    fallStartY: PLAYER.eyeHeight
   };
 
   function updateCamera() {
@@ -79,8 +79,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
 
   addEventListener('keydown', e => {
     if (keyMap[e.code]) {
-      keys[keyMap[e.code]] = true;
-      e.preventDefault();
+      keys[keyMap[e.code]] = true; e.preventDefault();
       if (keyMap[e.code] === 'jump') player.jumpBufferTimer = PLAYER.jumpBuffer;
     }
   });
@@ -103,7 +102,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch));
   });
 
-  // HUD (unchanged)
+  // HUD (debug UI)
   const tracker = document.createElement('div');
   tracker.style.position = 'absolute';
   tracker.style.top = '10px';
@@ -125,7 +124,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     return dir;
   }
 
-  // Explosions
+  // Explosions (unchanged)
   const explosions = [];
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2(0, 0);
@@ -153,7 +152,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     }
   });
 
-  // Screen shake (fall-based only)
+  // Screen shake state
   let shakeTime = 0;
   let shakeIntensity = 0;
 
@@ -164,17 +163,17 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
     prevTime = now;
 
     const dir = getCameraDir();
+    const targetSpeed = (keys.run ? PLAYER.runSpeed : PLAYER.walkSpeed);
 
-    if (player.grounded) player.coyoteTimer = PLAYER.coyoteTime;
-    else player.coyoteTimer -= dt;
+    if (player.grounded) player.coyoteTimer = PLAYER.coyoteTime; else player.coyoteTimer -= dt;
     if (player.jumpBufferTimer > 0) player.jumpBufferTimer -= dt;
 
-    // Start tracking fall
-    if (!player.grounded && player.vel.y < 0 && player.fallStartY === 0) {
+    // Start fall tracking
+    if (!player.grounded && player.vel.y < 0 && player.fallStartY === null) {
       player.fallStartY = player.pos.y;
     }
 
-    // Horizontal velocity
+    // Horizontal movement
     const hVel = new THREE.Vector3(player.vel.x, 0, player.vel.z);
     if (dir.lengthSq() > 0) {
       const accel = player.grounded ? PLAYER.accel : PLAYER.airAccel;
@@ -195,30 +194,40 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
       player.jumpBufferTimer = 0;
       player.vel.y = PLAYER.jumpPower;
       player.runCap *= 1.05;
+      player.fallStartY = player.pos.y; // reset fall tracking
     }
+
+    const currentH = Math.sqrt(player.vel.x ** 2 + player.vel.z ** 2);
+    if (currentH <= PLAYER.walkSpeed) player.runCap = PLAYER.runSpeed;
 
     player.pos.addScaledVector(player.vel, dt);
 
-    // Ground collision + fall check
+    // Ground collision
     if (player.pos.y < PLAYER.eyeHeight) {
-      const fallDistance = player.fallStartY - player.pos.y;
-      if (fallDistance >= 10) {
-        shakeTime = 0.4;
-        shakeIntensity = Math.min(0.5, fallDistance / 50);
+      if (!player.grounded) {
+        // Just landed
+        const fallDist = (player.fallStartY || player.eyeHeight) - PLAYER.eyeHeight;
+        if (fallDist > 10) { // Only shake from 10m+
+          shakeTime = 0.25; // duration
+          shakeIntensity = Math.min((fallDist - 10) * 0.03, 0.25);
+        }
       }
       player.pos.y = PLAYER.eyeHeight;
       player.vel.y = 0;
       player.grounded = true;
-      player.fallStartY = 0;
+      player.fallStartY = null;
     } else {
       player.grounded = false;
     }
 
-    // World wrap
-    if (player.pos.x > WORLD_SIZE / 2) player.pos.x -= WORLD_SIZE;
-    if (player.pos.x < -WORLD_SIZE / 2) player.pos.x += WORLD_SIZE;
-    if (player.pos.z > WORLD_SIZE / 2) player.pos.z -= WORLD_SIZE;
-    if (player.pos.z < -WORLD_SIZE / 2) player.pos.z += WORLD_SIZE;
+    // Screen shake update
+    if (shakeTime > 0) {
+      shakeTime -= dt;
+      const shake = shakeIntensity * (shakeTime / 0.25);
+      camera.position.x += (Math.random() - 0.5) * shake;
+      camera.position.y += (Math.random() - 0.5) * shake;
+      camera.position.z += (Math.random() - 0.5) * shake;
+    }
 
     // Explosions visuals
     for (let i = explosions.length - 1; i >= 0; i--) {
@@ -231,17 +240,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.m
       }
     }
 
-    // Screen shake effect (no velocity trigger)
-    if (shakeTime > 0) {
-      shakeTime -= dt;
-      const shake = shakeIntensity * (shakeTime / 0.4);
-      camera.position.x += (Math.random() - 0.5) * shake;
-      camera.position.y += (Math.random() - 0.5) * shake;
-      camera.position.z += (Math.random() - 0.5) * shake;
-    }
-
     updateCamera();
-    const currentH = Math.sqrt(player.vel.x ** 2 + player.vel.z ** 2);
     tracker.textContent = `X:${player.pos.x.toFixed(2)} Y:${player.pos.y.toFixed(2)} Z:${player.pos.z.toFixed(2)}\nSpeed:${currentH.toFixed(2)} RunCap:${player.runCap.toFixed(2)}`;
 
     renderer.render(scene, camera);
