@@ -1,16 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <title>3D Game</title>
   <style>
     body { margin: 0; overflow: hidden; }
     #overlay {
-      position: absolute; top: 0; left: 0;
+      position: absolute;
+      top: 0; left: 0;
       width: 100%; height: 100%;
       background: rgba(0,0,0,0.7);
-      display: flex; justify-content: center; align-items: center;
-      color: #fff; font-family: monospace; font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      font-family: monospace;
+      font-size: 20px;
       z-index: 10;
     }
     #startBtn {
@@ -19,22 +24,23 @@
       border: 2px solid #fff;
       cursor: pointer;
     }
-    #tracker {
-      position: absolute; top: 10px; left: 10px;
-      color: #fff; background: rgba(0,0,0,0.5);
-      padding: 6px; font-family: monospace; white-space: pre;
-      z-index: 10;
-    }
   </style>
 </head>
 <body>
   <div id="overlay">
     <div id="startBtn">Click to Start</div>
   </div>
-  <div id="tracker"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.162.0/examples/js/objects/Sky.js"></script>
-  <script src="main.js"></script>
+  <script type="module" src="main.js"></script>
+  <script type="module">
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('startBtn');
+
+    startBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      document.querySelector('canvas')?.requestPointerLock();
+    });
+  </script>
 </body>
 </html>
+
